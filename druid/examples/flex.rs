@@ -14,14 +14,13 @@
 
 //! Demonstrates alignment of children in the flex container.
 
+use druid::text::format::ParseFormatter;
 use druid::widget::prelude::*;
 use druid::widget::{
     Button, Checkbox, CrossAxisAlignment, Flex, Label, MainAxisAlignment, ProgressBar, RadioGroup,
     SizedBox, Slider, Stepper, Switch, TextBox, WidgetExt,
 };
-use druid::{
-    AppLauncher, Color, Data, Lens, LensExt, LocalizedString, PlatformError, WidgetId, WindowDesc,
-};
+use druid::{AppLauncher, Color, Data, Lens, LocalizedString, PlatformError, WidgetId, WindowDesc};
 
 const DEFAULT_SPACER_SIZE: f64 = 8.;
 
@@ -210,11 +209,8 @@ fn make_spacer_select() -> impl Widget<Params> {
             Flex::row()
                 .with_child(
                     TextBox::new()
-                        .parse()
-                        .lens(
-                            Params::spacer_size
-                                .map(|x| Some(*x), |x, y| *x = y.unwrap_or(DEFAULT_SPACER_SIZE)),
-                        )
+                        .with_formatter(ParseFormatter::new())
+                        .lens(Params::spacer_size)
                         .fix_width(60.0),
                 )
                 .with_spacer(druid::theme::WIDGET_CONTROL_COMPONENT_PADDING)
