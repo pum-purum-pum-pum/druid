@@ -23,11 +23,29 @@ use super::clipboard::Clipboard;
 use super::window::Window;
 use anyhow::{anyhow, Context, Error};
 
-use skulpin::CoordinateSystemHelper;
-use skulpin::winit;
-use skulpin::skia_safe;
+const WIDTH: usize = 800;
+const HEIGHT: usize = 600;
+const FFT_BUFSIZE: usize = 44100 / 8;
+const EQ_NODES: usize = 200;
+
+use std::{collections::VecDeque, convert::TryInto, fs, ops, sync::mpsc, time};
+use glutin::dpi::LogicalSize;
+#[cfg(windows)]
+use glutin::platform::windows::WindowBuilderExtWindows;
+use glutin::{
+    event::{Event, KeyboardInput, VirtualKeyCode, WindowEvent},
+    event_loop::{ControlFlow, EventLoop},
+    window::WindowBuilder,
+    ContextBuilder, GlRequest,
+};
+use skia_safe::{
+    gpu::{gl::FramebufferInfo, BackendRenderTarget, SurfaceOrigin},
+    Color, ColorType, Paint, PaintStyle, Path, Surface,
+};
 
 use crate::piet::{Piet, PietText, RenderContext};
+
+type WindowedContext = glutin::ContextWrapper<glutin::PossiblyCurrent, glutin::window::Window>;
 
 #[derive(Clone)]
 pub(crate) struct Application {  
@@ -59,108 +77,117 @@ impl Application {
     }
 
     pub fn run(self, _handler: Option<Box<dyn AppHandler>>) {
-        // Create the winit event loop
-        let event_loop = winit::event_loop::EventLoop::<()>::with_user_event();
-        // Set up the coordinate system to be fixed at 900x600, and use this as the default window size
-        // This means the drawing code can be written as though the window is always 900x600. The
-        // output will be automatically scaled so that it's always visible.
-        let logical_size = winit::dpi::LogicalSize::new(900.0, 600.0);
-        let visible_range = skulpin::skia_safe::Rect {
-            left: 0.0,
-            right: logical_size.width as f32,
-            top: 0.0,
-            bottom: logical_size.height as f32,
+        let event_loop = EventLoop::new();
+        let logical_window_size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
+
+        // Open a window.
+        let window_builder = WindowBuilder::new()
+            .with_title("Minimal example")
+            .with_inner_size(logical_window_size);
+        #[cfg(windows)]
+        let window_builder = window_builder.with_drag_and_drop(false);
+
+        // Create an OpenGL 3.x context for Pathfinder to use.
+        let gl_context = ContextBuilder::new()
+            .with_gl(GlRequest::GlThenGles {
+                opengl_version: (4, 6),
+                opengles_version: (3, 1),
+            })
+            .build_windowed(window_builder, &event_loop)
+            .unwrap();
+
+        // Load OpenGL, and make the context current.
+        let gl_context = unsafe { gl_context.make_current().unwrap() };
+
+        gl::load_with(|name| gl_context.get_proc_address(name));
+
+        let mut gr_context = skia_safe::gpu::Context::new_gl(None, None).unwrap();
+
+        let fb_info = {
+            let mut fboid: gl::types::GLint = 0;
+            unsafe { gl::GetIntegerv(gl::FRAMEBUFFER_BINDING, &mut fboid) };
+
+            FramebufferInfo {
+                fboid: fboid.try_into().unwrap(),
+                format: skia_safe::gpu::gl::Format::RGBA8.into(),
+            }
         };
-        let scale_to_fit = skulpin::skia_safe::matrix::ScaleToFit::Center;
-        // Create a single window
-        let winit_window = winit::window::WindowBuilder::new()
-            .with_title("Skulpin")
-            .with_inner_size(logical_size)
-            .build(&event_loop)
-            .expect("Failed to create window");
+
+        fn create_surface(
+            windowed_context: &WindowedContext,
+            fb_info: &FramebufferInfo,
+            gr_context: &mut skia_safe::gpu::Context,
+        ) -> skia_safe::Surface {
+            let pixel_format = windowed_context.get_pixel_format();
+            let size = windowed_context.window().inner_size();
+            let backend_render_target = BackendRenderTarget::new_gl(
+                (
+                    size.width.try_into().unwrap(),
+                    size.height.try_into().unwrap(),
+                ),
+                pixel_format.multisampling.map(|s| s.try_into().unwrap()),
+                pixel_format.stencil_bits.try_into().unwrap(),
+                *fb_info,
+            );
+            Surface::from_backend_render_target(
+                gr_context,
+                &backend_render_target,
+                SurfaceOrigin::BottomLeft,
+                ColorType::RGBA8888,
+                None,
+                None,
+            )
+            .unwrap()
+        };
+
+        let mut surface = create_surface(&gl_context, &fb_info, &mut gr_context);
+        let sf = gl_context.window().scale_factor() as f32;
+        surface.canvas().scale((sf, sf));
     
-        let window = skulpin::WinitWindow::new(&winit_window);
-        // Create the renderer, which will draw to the window
-        let renderer = skulpin::RendererBuilder::new()
-            .use_vulkan_debug_layer(false)
-            .coordinate_system(skulpin::CoordinateSystem::VisibleRange(
-                visible_range,
-                scale_to_fit,
-            ))
-            .build(&window);
-    
-        // Check if there were error setting up vulkan
-        if let Err(e) = renderer {
-            println!("Error during renderer construction: {:?}", e);
-            panic!();
-        }
-    
-        let mut renderer = renderer.unwrap();
-    
-        // Increment a frame count so we can render something that moves
-        let mut frame_count = 0;
-        event_loop.run(move |event, _window_target, control_flow| {
-        
-            let window = skulpin::WinitWindow::new(&winit_window);
+
+        event_loop.run(move |event, _, control_flow| {
+            *control_flow = ControlFlow::Poll;
+
+            let size = gl_context.window().inner_size();
+            let size = (size.width as f32, size.height as f32);
 
             match event {
-                //
-                // Halt if the user requests to close the window
-                //
-                winit::event::Event::WindowEvent {
-                    event: winit::event::WindowEvent::CloseRequested,
+                Event::WindowEvent {
+                    event: WindowEvent::CloseRequested,
                     ..
-                } => *control_flow = winit::event_loop::ControlFlow::Exit,
-
-                //
-                // Close if the escape key is hit
-                //
-                winit::event::Event::WindowEvent {
+                }
+                | Event::WindowEvent {
                     event:
-                        winit::event::WindowEvent::KeyboardInput {
+                        WindowEvent::KeyboardInput {
                             input:
-                                winit::event::KeyboardInput {
-                                    virtual_keycode: Some(winit::event::VirtualKeyCode::Escape),
+                                KeyboardInput {
+                                    virtual_keycode: Some(VirtualKeyCode::Escape),
                                     ..
                                 },
                             ..
                         },
                     ..
-                } => *control_flow = winit::event_loop::ControlFlow::Exit,
-
-                //
-                // Request a redraw any time we finish processing events
-                //
-                winit::event::Event::MainEventsCleared => {
-                    // Queue a RedrawRequested event.
-                    winit_window.request_redraw();
+                } => {
+                    *control_flow = ControlFlow::Exit;
                 }
-
-                //
-                // Redraw
-                //
-                winit::event::Event::RedrawRequested(_window_id) => {
-                    if let Err(e) = renderer.draw(&window, |canvas, coordinate_system_helper| {
-                        let mut state = borrow_mut!(self.state).unwrap();
-                        let main_window = state.window.as_mut().unwrap();
-                        main_window.render(canvas);
-                        //let main_window = borrow!(self.state).unwrap().window.unwrap();
-                        //let mut state = borrow_mut!(self.state).unwrap();
-                        //let main_window = state.window.as_mut().unwrap();
-                        //let mut main_window = borrow_mut!(main_window).unwrap();
-                        //let main_window = borrow!(self.state).unwrap().window.unwrap();
-                        //main_window.render(&window, control_flow);
-                        //draw(canvas, coordinate_system_helper, frame_count);
-                        //frame_count += 1;
-                    }) {
-                        println!("Error during draw: {:?}", e);
-                        *control_flow = winit::event_loop::ControlFlow::Exit
-                    }
+                Event::WindowEvent {
+                    event: WindowEvent::Resized(physical_size),
+                    ..
+                } => {
+                    gl_context.resize(physical_size);
+                    surface = create_surface(&gl_context, &fb_info, &mut gr_context);
                 }
-
-                //
-                // Ignore all other events
-                //
+                Event::RedrawRequested(_) => {
+                    let canvas = surface.canvas();
+                    let mut state = borrow_mut!(self.state).unwrap();
+                    let main_window = state.window.as_mut().unwrap();
+                    main_window.render(canvas);
+                    surface.canvas().flush();
+                    gl_context.swap_buffers().unwrap();
+                }
+                Event::MainEventsCleared => {
+                    gl_context.window().request_redraw();
+                }
                 _ => {}
             }
         });

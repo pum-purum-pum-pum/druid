@@ -40,8 +40,8 @@ use crate::region::Region;
 use crate::window;
 use crate::window::{FileDialogToken, IdleToken, TimerToken, WinHandler, WindowLevel};
 
-use skulpin::skia_safe;
-use skulpin::winit;
+use skia_safe;
+//use skulpin::winit;
 
 pub struct Window {
     handler: RefCell<Box<dyn WinHandler>>,
@@ -115,7 +115,7 @@ struct WindowState {
 }
 
 // TODO: support custom cursors
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct CustomCursor;
 
 impl WindowState {

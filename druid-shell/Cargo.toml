@@ -36,7 +36,10 @@ dxt = ["piet-common/dxt"]
 hdr = ["piet-common/hdr"]
 
 [dependencies]
-skulpin = {git = "https://github.com/aclysma/skulpin.git", features = ["skulpin_winit", "skulpin_sdl2", "skia_complete", "winit-23"], default-features = false, rev = "8a913ed52fcbe3cdd2cb97ed245f7e5798ee05c4"}
+#skulpin = {git = "https://github.com/aclysma/skulpin.git", features = ["skulpin_winit", "skulpin_sdl2", "skia_complete", "winit-23"], default-features = false, rev = "8a913ed52fcbe3cdd2cb97ed245f7e5798ee05c4"}
+gl = "0.14"
+glutin = { version = "0.25", features = ["wayland"], default_features = false }
+skia-safe = { git = "https://github.com/Vurich/rust-skia.git", features = ["gl", "wayland"] }
 
 # NOTE: When changing the piet or kurbo versions, ensure that
 #       the kurbo version included in piet is compatible with the kurbo version specified here.

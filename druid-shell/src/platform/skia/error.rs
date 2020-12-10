@@ -12,28 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! errors.
-use std::sync::Arc;
-
 #[derive(Debug, Clone)]
 pub enum Error {
-    SkiaError(Arc<skulpin::CreateRendererError>),
     Unimplemented,
 }
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Error::SkiaError(err) => err.fmt(f),
             Error::Unimplemented => write!(f, "Requested an unimplemented feature"),
         }
     }
 }
 
 impl std::error::Error for Error {}
-
-impl From<skulpin::CreateRendererError> for Error {
-    fn from(err: skulpin::CreateRendererError) -> Error {
-        Error::SkiaError(Arc::new(err))
-    }
-}
