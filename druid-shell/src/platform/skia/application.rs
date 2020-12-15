@@ -181,7 +181,8 @@ impl Application {
                     let canvas = surface.canvas();
                     let mut state = borrow_mut!(self.state).unwrap();
                     let main_window = state.window.as_mut().unwrap();
-                    main_window.render(canvas);
+                    main_window.run_idle();
+                    main_window.render(canvas).unwrap();
                     surface.canvas().flush();
                     gl_context.swap_buffers().unwrap();
                 }

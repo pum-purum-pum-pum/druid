@@ -46,18 +46,34 @@ use skia_safe;
 pub struct Window {
     handler: RefCell<Box<dyn WinHandler>>,
     window_state: RefCell<WindowState>,
+    idle_queue: Arc<Mutex<Vec<IdleKind>>>,
 }
 
 impl Window {
-    //// TODO passing winit window in this struct is not ok....
-    //pub fn render(&mut self, window: &skulpin::WinitWindow, control_flow: &mut winit::event_loop::ControlFlow) {
-    //        dbg!("I'm rendering stuff");
-    //        let mut piet_ctx = Piet::new(canvas);
-    //}
-    pub fn render(&self, canvas: &mut skia_safe::Canvas) {
+    pub fn render(&self, canvas: &mut skia_safe::Canvas) -> Result<(), Error> {
+        let mut invalid = Region::EMPTY;
+        // TODO rewrite
+        invalid.add_rect(Rect::new(0., 0., 1000., 1000.));
+        //let invalid = std::mem::replace(&mut borrow_mut!(self.window_state).unwrap().invalid, Region::EMPTY);
         let mut piet_ctx = Piet::new(canvas);
         let mut win_handler = borrow_mut!(self.handler).unwrap();
-        win_handler.paint(&mut piet_ctx, &*borrow!(borrow!(self.window_state).unwrap().invalid).unwrap());
+        
+        //win_handler.paint(&mut piet_ctx, &*borrow!(borrow!(self.window_state).unwrap().invalid).unwrap());
+        win_handler.paint(&mut piet_ctx, &invalid);
+        Ok(())
+    }
+
+    #[track_caller]
+    fn with_handler<T, F: FnOnce(&mut dyn WinHandler) -> T>(&self, f: F) -> Option<T> {
+        if 
+           self.handler.try_borrow_mut().is_err() 
+            || self.window_state.try_borrow_mut().is_err()
+        {
+            log::error!("other RefCells were borrowed when calling into the handler");
+            return None;
+        }
+
+        self.with_handler_and_dont_check_the_other_borrows(f)
     }
 
     #[track_caller]
@@ -78,7 +94,37 @@ impl Window {
         self.with_handler_and_dont_check_the_other_borrows(|h| {
             h.connect(&handle.into());
             h.scale(Scale::default());
+            h.size(Size::new(1000., 1000.)) // TODO
         });
+    }
+
+    pub(crate) fn run_idle(&self) {
+        let mut queue = Vec::new();
+        std::mem::swap(&mut *self.idle_queue.lock().unwrap(), &mut queue);
+
+        let mut needs_redraw = false;
+        self.with_handler(|handler| {
+            for callback in queue {
+                match callback {
+                    IdleKind::Callback(f) => {
+                        f.call(handler.as_any());
+                    }
+                    IdleKind::Token(tok) => {
+                        handler.idle(tok);
+                    }
+                    IdleKind::Redraw => {
+                        needs_redraw = true;
+                    }
+                }
+            }
+        });
+
+        // TODO
+        //if needs_redraw {
+        //    if let Err(e) = self.redraw_now() {
+        //        log::error!("Error redrawing: {}", e);
+        //    }
+        //}
     }
 }
 
@@ -95,16 +141,58 @@ pub(crate) struct WindowBuilder {
 pub struct WindowHandle(Weak<Window>);
 
 /// A handle that can get used to schedule an idle handler. Note that
-/// this handle is thread safe.
+/// this handle can be cloned and sent between threads.
 #[derive(Clone)]
 pub struct IdleHandle {
-    state: Weak<WindowState>,
     queue: Arc<Mutex<Vec<IdleKind>>>,
+    // TODO why there was file descriptor x11, what's the purpose of it
+    // note that it's created in application.rs also
+    //    pipe: RawFd,
 }
 
-enum IdleKind {
+pub(crate) enum IdleKind {
     Callback(Box<dyn IdleCallback>),
     Token(IdleToken),
+    Redraw,
+}
+
+impl IdleHandle {
+    fn wake(&self) {
+//        loop {
+//            match nix::unistd::write(self.pipe, &[0]) {
+//                Err(nix::Error::Sys(nix::errno::Errno::EINTR)) => {}
+//                Err(nix::Error::Sys(nix::errno::Errno::EAGAIN)) => {}
+//                Err(e) => {
+//                    log::error!("Failed to write to idle pipe: {}", e);
+//                    break;
+//                }
+//                Ok(_) => {
+//                    break;
+//                }
+//            }
+//        }
+    }
+
+    pub(crate) fn schedule_redraw(&self) {
+        self.queue.lock().unwrap().push(IdleKind::Redraw);
+        self.wake();
+    }
+
+    pub fn add_idle_callback<F>(&self, callback: F)
+    where
+        F: FnOnce(&dyn Any) + Send + 'static,
+    {
+        self.queue
+            .lock()
+            .unwrap()
+            .push(IdleKind::Callback(Box::new(callback)));
+        self.wake();
+    }
+
+    pub fn add_idle_token(&self, token: IdleToken) {
+        self.queue.lock().unwrap().push(IdleKind::Token(token));
+        self.wake();
+    }
 }
 
 struct WindowState {
@@ -207,6 +295,7 @@ impl WindowBuilder {
         let window = Rc::new(Window {
             handler: RefCell::new(handler),
             window_state: RefCell::new(state),
+            idle_queue: Arc::new(Mutex::new(Vec::new())),
         });
         
         let handle = WindowHandle(Rc::downgrade(&window));
@@ -285,14 +374,6 @@ impl WindowHandle {
     }
 
     pub fn invalidate(&self) { 
-        //unimplemented!(); 
-        
-        if let Some(s) = self.0.upgrade() {
-            let s = borrow_mut!(s.window_state).unwrap();
-            s.invalid
-                .borrow_mut()
-                .add_rect(s.area.get().size_dp().to_rect());
-        }
         self.render_soon();
     }
 
@@ -348,13 +429,14 @@ impl WindowHandle {
 
     /// Get a handle that can be used to schedule an idle task.
     pub fn get_idle_handle(&self) -> Option<IdleHandle> { 
-        log::warn!("VLAD implement idle_handle");
-        None
-        //unimplemented!(); 
-        //self.0.upgrade().map(|w| IdleHandle {
-        //    state: Rc::downgrade(&w),
-        //    queue: w.idle_queue.clone(),
-        //})
+        if let Some(w) = self.0.upgrade() {
+            Some(IdleHandle {
+                queue: Arc::clone(&w.idle_queue),
+                //pipe: w.idle_pipe,
+            })
+        } else {
+            None
+        }
     }
 
     /// Get the `Scale` of the window.
@@ -383,44 +465,6 @@ impl WindowHandle {
 }
 
 unsafe impl Send for IdleHandle {}
-
-impl IdleHandle {
-    /// Add an idle handler, which is called (once) when the main thread is idle.
-    pub fn add_idle_callback<F>(&self, callback: F)
-    where
-        F: FnOnce(&dyn Any) + Send + 'static,
-    {
-        let mut queue = self.queue.lock().expect("IdleHandle::add_idle queue");
-        queue.push(IdleKind::Callback(Box::new(callback)));
-
-        if queue.len() == 1 {
-            if let Some(window_state) = self.state.upgrade() {
-                let state = window_state.clone();
-                window_state
-                    .request_animation_frame(move || {
-                        state.process_idle_queue();
-                    })
-                    .expect("request_animation_frame failed");
-            }
-        }
-    }
-
-    pub fn add_idle_token(&self, token: IdleToken) {
-        let mut queue = self.queue.lock().expect("IdleHandle::add_idle queue");
-        queue.push(IdleKind::Token(token));
-
-        if queue.len() == 1 {
-            if let Some(window_state) = self.state.upgrade() {
-                let state = window_state.clone();
-                window_state
-                    .request_animation_frame(move || {
-                        state.process_idle_queue();
-                    })
-                    .expect("request_animation_frame failed");
-            }
-        }
-    }
-}
 
 fn mouse_button(button: i16) -> Option<MouseButton> {
     match button {
