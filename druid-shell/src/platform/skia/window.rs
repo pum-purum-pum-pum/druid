@@ -23,9 +23,11 @@ use std::panic::Location;
 
 use instant::Instant;
 
-use crate::kurbo::{Point, Rect, Size};
+use crate::kurbo::{Point, Rect, Size, Vec2};
 
-use crate::piet::{Piet, PietText, RenderContext};
+use crate::piet::{Piet, PietText};
+
+use glutin::dpi::PhysicalPosition;
 
 use super::application::Application;
 use super::error::Error;
@@ -34,14 +36,14 @@ use crate::common_util::IdleCallback;
 use crate::dialog::{FileDialogOptions, FileDialogType};
 use crate::error::Error as ShellError;
 use crate::scale::{Scale, ScaledArea};
+use crate::keyboard::Modifiers;
 
-use crate::mouse::{Cursor, CursorDesc, MouseButton, MouseButtons};
+use crate::mouse::{Cursor, CursorDesc, MouseButton, MouseButtons, MouseEvent};
 use crate::region::Region;
 use crate::window;
 use crate::window::{FileDialogToken, IdleToken, TimerToken, WinHandler, WindowLevel};
 
 use skia_safe;
-//use skulpin::winit;
 
 pub struct Window {
     handler: RefCell<Box<dyn WinHandler>>,
@@ -54,11 +56,9 @@ impl Window {
         let mut invalid = Region::EMPTY;
         // TODO rewrite
         invalid.add_rect(Rect::new(0., 0., 1000., 1000.));
-        //let invalid = std::mem::replace(&mut borrow_mut!(self.window_state).unwrap().invalid, Region::EMPTY);
         let mut piet_ctx = Piet::new(canvas);
         let mut win_handler = borrow_mut!(self.handler).unwrap();
         
-        //win_handler.paint(&mut piet_ctx, &*borrow!(borrow!(self.window_state).unwrap().invalid).unwrap());
         win_handler.paint(&mut piet_ctx, &invalid);
         Ok(())
     }
@@ -112,7 +112,7 @@ impl Window {
                     IdleKind::Token(tok) => {
                         handler.idle(tok);
                     }
-                    IdleKind::Redraw => {
+                    IdleKind::_Redraw => {
                         needs_redraw = true;
                     }
                 }
@@ -126,6 +126,64 @@ impl Window {
         //    }
         //}
     }
+
+
+    pub fn handle_motion_notify(&self, physical_position: PhysicalPosition<f64>) {
+        let mouse_event = MouseEvent {
+            pos: Point::new(physical_position.x, physical_position.y),
+            buttons: MouseButtons::new(),
+            mods: Modifiers::empty(), // TODO
+            count: 0,
+            focus: false,
+            button: MouseButton::None,
+            wheel_delta: Vec2::ZERO,
+
+        };
+        self.with_handler(|h| h.mouse_move(&mouse_event));
+    }
+
+    pub fn handle_button_press(&self, physical_position: PhysicalPosition<f64>) {
+        let mouse_event = MouseEvent {
+            pos: Point::new(physical_position.x, physical_position.y),
+            buttons: MouseButtons::new(),
+            mods: Modifiers::empty(), // TODO
+            count: 1,
+            focus: false,
+            button: MouseButton::None,
+            wheel_delta: Vec2::ZERO,
+
+        };
+        self.with_handler(|h| h.mouse_down(&mouse_event));
+    }
+
+    pub fn handle_button_release(&self, physical_position: PhysicalPosition<f64>) {
+        let mouse_event = MouseEvent {
+            pos: Point::new(physical_position.x, physical_position.y),
+            buttons: MouseButtons::new(),
+            mods: Modifiers::empty(), // TODO
+            count: 0,
+            focus: false,
+            button: MouseButton::None,
+            wheel_delta: Vec2::ZERO,
+
+        };
+        self.with_handler(|h| h.mouse_up(&mouse_event));
+    }
+//    pub fn handle_button_release(&self, button_release: &xproto::ButtonReleaseEvent) {
+//        let button = mouse_button(button_release.detail);
+//        let mouse_event = MouseEvent {
+//            pos: Point::new(button_release.event_x as f64, button_release.event_y as f64),
+//            // The xcb state includes the newly released button, but druid
+//            // doesn't want it.
+//            buttons: mouse_buttons(button_release.state).without(button),
+//            mods: key_mods(button_release.state),
+//            count: 0,
+//            focus: false,
+//            button,
+//            wheel_delta: Vec2::ZERO,
+//        };
+//        self.with_handler(|h| h.mouse_up(&mouse_event));
+//    }
 }
 
 /// Builder abstraction for creating new windows.
@@ -133,7 +191,7 @@ pub(crate) struct WindowBuilder {
     app: Application,
     handler: Option<Box<dyn WinHandler>>,
     title: String,
-    cursor: Cursor,
+    _cursor: Cursor,
     menu: Option<Menu>,
 }
 
@@ -153,7 +211,7 @@ pub struct IdleHandle {
 pub(crate) enum IdleKind {
     Callback(Box<dyn IdleCallback>),
     Token(IdleToken),
-    Redraw,
+    _Redraw,
 }
 
 impl IdleHandle {
@@ -173,8 +231,8 @@ impl IdleHandle {
 //        }
     }
 
-    pub(crate) fn schedule_redraw(&self) {
-        self.queue.lock().unwrap().push(IdleKind::Redraw);
+    pub(crate) fn _schedule_redraw(&self) {
+        self.queue.lock().unwrap().push(IdleKind::_Redraw);
         self.wake();
     }
 
@@ -196,40 +254,15 @@ impl IdleHandle {
 }
 
 struct WindowState {
-    scale: Cell<Scale>,
-    area: Cell<ScaledArea>,
-    idle_queue: Arc<Mutex<Vec<IdleKind>>>,
-    invalid: RefCell<Region>,
+    _scale: Cell<Scale>,
+    _area: Cell<ScaledArea>,
+    _idle_queue: Arc<Mutex<Vec<IdleKind>>>,
+    _invalid: RefCell<Region>,
 }
 
 // TODO: support custom cursors
 #[derive(Clone, PartialEq)]
 pub struct CustomCursor;
-
-impl WindowState {
-    fn render(&self) {
-        dbg!();
-    }
-
-    fn process_idle_queue(&self) {
-        dbg!();
-    }
-
-    fn request_animation_frame(&self, f: impl FnOnce() + 'static) -> Result<i32, Error> {
-        unimplemented!();
-    }
-
-    /// Returns the window size in css units
-    fn get_window_size_and_dpr(&self) -> (f64, f64, f64) {
-        unimplemented!()
-    }
-
-    /// Updates the canvas size and scale factor and returns `Scale` and `ScaledArea`.
-    fn update_scale_and_area(&self) -> (Scale, ScaledArea) {
-        unimplemented!()
-    }
-}
-
 
 impl WindowBuilder {
     pub fn new(app: Application) -> WindowBuilder {
@@ -237,7 +270,7 @@ impl WindowBuilder {
             app,
             handler: None,
             title: String::new(),
-            cursor: Cursor::Arrow,
+            _cursor: Cursor::Arrow,
             menu: None,
         }
     }
@@ -287,10 +320,10 @@ impl WindowBuilder {
         let handler = self.handler.unwrap();
         // TODO
         let state = WindowState {
-            scale: Cell::new(Scale::default()),
-            area: Cell::new(ScaledArea::default()),
-            idle_queue: Default::default(),
-            invalid: RefCell::new(Region::EMPTY),
+            _scale: Cell::new(Scale::default()),
+            _area: Cell::new(ScaledArea::default()),
+            _idle_queue: Default::default(),
+            _invalid: RefCell::new(Region::EMPTY),
         };
         let window = Rc::new(Window {
             handler: RefCell::new(handler),
@@ -365,8 +398,9 @@ impl WindowHandle {
         self.render_soon();
     }
 
-    pub fn invalidate_rect(&self, rect: Rect) {
-        unimplemented!(); 
+    pub fn invalidate_rect(&self, _rect: Rect) {
+        log::warn!("TODO invalidate rect");
+        //unimplemented!(); 
         //if let Some(s) = self.0.upgrade() {
         //    s.invalid.borrow_mut().add_rect(rect);
         //}
@@ -378,7 +412,7 @@ impl WindowHandle {
     }
 
     pub fn text(&self) -> PietText {
-        let s = self
+        let _s = self
             .0
             .upgrade()
             .unwrap_or_else(|| panic!("Failed to produce a text context"));
@@ -386,11 +420,13 @@ impl WindowHandle {
         PietText::new()
     }
 
-    pub fn request_timer(&self, deadline: Instant) -> TimerToken {
-        unimplemented!()
+    pub fn request_timer(&self, _deadline: Instant) -> TimerToken {
+        log::warn!("TODO timer token");
+        TimerToken::next()
+        //unimplemented!()
     }
 
-    pub fn set_cursor(&mut self, cursor: &Cursor) {
+    pub fn set_cursor(&mut self, _cursor: &Cursor) {
     }
 
     pub fn make_cursor(&self, _cursor_desc: &CursorDesc) -> Option<Cursor> {
@@ -458,7 +494,7 @@ impl WindowHandle {
         log::warn!("show_context_menu unimplemented for web");
     }
 
-    pub fn set_title(&self, title: impl Into<String>) {
+    pub fn set_title(&self, _title: impl Into<String>) {
         unimplemented!();
         //log::warn!("set_title is not implemented");
     }
@@ -466,7 +502,7 @@ impl WindowHandle {
 
 unsafe impl Send for IdleHandle {}
 
-fn mouse_button(button: i16) -> Option<MouseButton> {
+fn _mouse_button(button: i16) -> Option<MouseButton> {
     match button {
         0 => Some(MouseButton::Left),
         1 => Some(MouseButton::Middle),
@@ -477,7 +513,7 @@ fn mouse_button(button: i16) -> Option<MouseButton> {
     }
 }
 
-fn mouse_buttons(mask: u16) -> MouseButtons {
+fn _mouse_buttons(mask: u16) -> MouseButtons {
     let mut buttons = MouseButtons::new();
     if mask & 1 != 0 {
         buttons.insert(MouseButton::Left);
