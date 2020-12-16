@@ -17,9 +17,9 @@
 use std::any::Any;
 use std::cell::{Cell, RefCell};
 use std::ffi::OsString;
+use std::panic::Location;
 use std::rc::{Rc, Weak};
 use std::sync::{Arc, Mutex};
-use std::panic::Location;
 
 use instant::Instant;
 
@@ -35,8 +35,8 @@ use super::menu::Menu;
 use crate::common_util::IdleCallback;
 use crate::dialog::{FileDialogOptions, FileDialogType};
 use crate::error::Error as ShellError;
-use crate::scale::{Scale, ScaledArea};
 use crate::keyboard::Modifiers;
+use crate::scale::{Scale, ScaledArea};
 
 use crate::mouse::{Cursor, CursorDesc, MouseButton, MouseButtons, MouseEvent};
 use crate::region::Region;
@@ -58,17 +58,14 @@ impl Window {
         invalid.add_rect(Rect::new(0., 0., 1000., 1000.));
         let mut piet_ctx = Piet::new(canvas);
         let mut win_handler = borrow_mut!(self.handler).unwrap();
-        
+
         win_handler.paint(&mut piet_ctx, &invalid);
         Ok(())
     }
 
     #[track_caller]
     fn with_handler<T, F: FnOnce(&mut dyn WinHandler) -> T>(&self, f: F) -> Option<T> {
-        if 
-           self.handler.try_borrow_mut().is_err() 
-            || self.window_state.try_borrow_mut().is_err()
-        {
+        if self.handler.try_borrow_mut().is_err() || self.window_state.try_borrow_mut().is_err() {
             log::error!("other RefCells were borrowed when calling into the handler");
             return None;
         }
@@ -127,7 +124,6 @@ impl Window {
         //}
     }
 
-
     pub fn handle_motion_notify(&self, physical_position: PhysicalPosition<f64>) {
         let mouse_event = MouseEvent {
             pos: Point::new(physical_position.x, physical_position.y),
@@ -137,7 +133,6 @@ impl Window {
             focus: false,
             button: MouseButton::None,
             wheel_delta: Vec2::ZERO,
-
         };
         self.with_handler(|h| h.mouse_move(&mouse_event));
     }
@@ -151,7 +146,6 @@ impl Window {
             focus: false,
             button: MouseButton::None,
             wheel_delta: Vec2::ZERO,
-
         };
         self.with_handler(|h| h.mouse_down(&mouse_event));
     }
@@ -165,25 +159,24 @@ impl Window {
             focus: false,
             button: MouseButton::None,
             wheel_delta: Vec2::ZERO,
-
         };
         self.with_handler(|h| h.mouse_up(&mouse_event));
     }
-//    pub fn handle_button_release(&self, button_release: &xproto::ButtonReleaseEvent) {
-//        let button = mouse_button(button_release.detail);
-//        let mouse_event = MouseEvent {
-//            pos: Point::new(button_release.event_x as f64, button_release.event_y as f64),
-//            // The xcb state includes the newly released button, but druid
-//            // doesn't want it.
-//            buttons: mouse_buttons(button_release.state).without(button),
-//            mods: key_mods(button_release.state),
-//            count: 0,
-//            focus: false,
-//            button,
-//            wheel_delta: Vec2::ZERO,
-//        };
-//        self.with_handler(|h| h.mouse_up(&mouse_event));
-//    }
+    //    pub fn handle_button_release(&self, button_release: &xproto::ButtonReleaseEvent) {
+    //        let button = mouse_button(button_release.detail);
+    //        let mouse_event = MouseEvent {
+    //            pos: Point::new(button_release.event_x as f64, button_release.event_y as f64),
+    //            // The xcb state includes the newly released button, but druid
+    //            // doesn't want it.
+    //            buttons: mouse_buttons(button_release.state).without(button),
+    //            mods: key_mods(button_release.state),
+    //            count: 0,
+    //            focus: false,
+    //            button,
+    //            wheel_delta: Vec2::ZERO,
+    //        };
+    //        self.with_handler(|h| h.mouse_up(&mouse_event));
+    //    }
 }
 
 /// Builder abstraction for creating new windows.
@@ -216,19 +209,19 @@ pub(crate) enum IdleKind {
 
 impl IdleHandle {
     fn wake(&self) {
-//        loop {
-//            match nix::unistd::write(self.pipe, &[0]) {
-//                Err(nix::Error::Sys(nix::errno::Errno::EINTR)) => {}
-//                Err(nix::Error::Sys(nix::errno::Errno::EAGAIN)) => {}
-//                Err(e) => {
-//                    log::error!("Failed to write to idle pipe: {}", e);
-//                    break;
-//                }
-//                Ok(_) => {
-//                    break;
-//                }
-//            }
-//        }
+        //        loop {
+        //            match nix::unistd::write(self.pipe, &[0]) {
+        //                Err(nix::Error::Sys(nix::errno::Errno::EINTR)) => {}
+        //                Err(nix::Error::Sys(nix::errno::Errno::EAGAIN)) => {}
+        //                Err(e) => {
+        //                    log::error!("Failed to write to idle pipe: {}", e);
+        //                    break;
+        //                }
+        //                Ok(_) => {
+        //                    break;
+        //                }
+        //            }
+        //        }
     }
 
     pub(crate) fn _schedule_redraw(&self) {
@@ -330,7 +323,7 @@ impl WindowBuilder {
             window_state: RefCell::new(state),
             idle_queue: Arc::new(Mutex::new(Vec::new())),
         });
-        
+
         let handle = WindowHandle(Rc::downgrade(&window));
         window.connect(handle.clone());
         self.app.add_window(window).unwrap(); // TODO Vlad handle error here
@@ -400,14 +393,14 @@ impl WindowHandle {
 
     pub fn invalidate_rect(&self, _rect: Rect) {
         log::warn!("TODO invalidate rect");
-        //unimplemented!(); 
+        //unimplemented!();
         //if let Some(s) = self.0.upgrade() {
         //    s.invalid.borrow_mut().add_rect(rect);
         //}
         //self.render_soon();
     }
 
-    pub fn invalidate(&self) { 
+    pub fn invalidate(&self) {
         self.render_soon();
     }
 
@@ -426,8 +419,7 @@ impl WindowHandle {
         //unimplemented!()
     }
 
-    pub fn set_cursor(&mut self, _cursor: &Cursor) {
-    }
+    pub fn set_cursor(&mut self, _cursor: &Cursor) {}
 
     pub fn make_cursor(&self, _cursor_desc: &CursorDesc) -> Option<Cursor> {
         log::warn!("Custom cursors are not yet supported in the web backend");
@@ -444,7 +436,7 @@ impl WindowHandle {
         None
     }
 
-    fn render_soon(&self) { 
+    fn render_soon(&self) {
         log::warn!("VLAD TODO unimplemented")
         //if let Some(s) = self.0.upgrade() {
         //    let state = s.clone();
@@ -464,7 +456,7 @@ impl WindowHandle {
     }
 
     /// Get a handle that can be used to schedule an idle task.
-    pub fn get_idle_handle(&self) -> Option<IdleHandle> { 
+    pub fn get_idle_handle(&self) -> Option<IdleHandle> {
         if let Some(w) = self.0.upgrade() {
             Some(IdleHandle {
                 queue: Arc::clone(&w.idle_queue),
@@ -476,8 +468,8 @@ impl WindowHandle {
     }
 
     /// Get the `Scale` of the window.
-    pub fn get_scale(&self) -> Result<Scale, ShellError> { 
-        unimplemented!(); 
+    pub fn get_scale(&self) -> Result<Scale, ShellError> {
+        unimplemented!();
         //Ok(self
         //    .0
         //    .upgrade()

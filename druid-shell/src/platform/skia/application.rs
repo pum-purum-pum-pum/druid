@@ -14,9 +14,9 @@
 
 //! Implementation of features at the application scope.
 
-use std::rc::Rc;
 use std::cell::RefCell;
 use std::convert::TryInto;
+use std::rc::Rc;
 
 use crate::application::AppHandler;
 
@@ -40,7 +40,8 @@ use glutin::{
     ContextBuilder, GlRequest,
 };
 use skia_safe::{
-    gpu::{gl::FramebufferInfo, BackendRenderTarget, SurfaceOrigin}, ColorType, Surface,
+    gpu::{gl::FramebufferInfo, BackendRenderTarget, SurfaceOrigin},
+    ColorType, Surface,
 };
 
 use anyhow::{anyhow, Error};
@@ -48,11 +49,10 @@ use anyhow::{anyhow, Error};
 type WindowedContext = glutin::ContextWrapper<glutin::PossiblyCurrent, glutin::window::Window>;
 
 #[derive(Clone)]
-pub(crate) struct Application {  
+pub(crate) struct Application {
     /// The mutable `Application` state.
     state: Rc<RefCell<State>>,
 }
-
 
 /// The mutable `Application` state.
 struct State {
@@ -68,7 +68,7 @@ impl Application {
             _quitting: false,
             window: None,
         }));
-        Ok(Application{state})
+        Ok(Application { state })
     }
 
     pub fn add_window(&self, window: Rc<Window>) -> Result<(), Error> {
@@ -78,12 +78,13 @@ impl Application {
 
     pub fn window(&self) -> Result<Rc<Window>, Error> {
         let state = borrow_mut!(self.state)?;
-        state.window
+        state
+            .window
             .as_ref()
             .cloned()
             .ok_or_else(|| anyhow!("No window"))
     }
-    
+
     pub fn run(self, _handler: Option<Box<dyn AppHandler>>) {
         if let Err(e) = self.run_inner() {
             log::error!("{}", e);
@@ -135,10 +136,7 @@ impl Application {
             let pixel_format = windowed_context.get_pixel_format();
             let size = windowed_context.window().inner_size();
             let backend_render_target = BackendRenderTarget::new_gl(
-                (
-                    size.width.try_into()?,
-                    size.height.try_into()?,
-                ),
+                (size.width.try_into()?, size.height.try_into()?),
                 pixel_format.multisampling.and_then(|s| s.try_into().ok()),
                 pixel_format.stencil_bits.try_into()?,
                 *fb_info,
@@ -150,13 +148,14 @@ impl Application {
                 ColorType::RGBA8888,
                 None,
                 None,
-            ).ok_or_else(|| anyhow!("No window"))
+            )
+            .ok_or_else(|| anyhow!("No window"))
         };
 
         let mut surface = create_surface(&gl_context, &fb_info, &mut gr_context)?;
         let sf = gl_context.window().scale_factor() as f32;
         surface.canvas().scale((sf, sf));
-    
+
         let mut cursor_position = PhysicalPosition::new(0., 0.);
         event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Poll;
@@ -188,10 +187,11 @@ impl Application {
                     ..
                 } => {
                     gl_context.resize(physical_size);
-                    surface = create_surface(&gl_context, &fb_info, &mut gr_context).unwrap(); // TODO something with these unwraps
+                    surface = create_surface(&gl_context, &fb_info, &mut gr_context).unwrap();
+                    // TODO something with these unwraps
                 }
                 Event::WindowEvent {
-                    event: WindowEvent::CursorMoved {position, ..},
+                    event: WindowEvent::CursorMoved { position, .. },
                     ..
                 } => {
                     cursor_position = position;
@@ -200,10 +200,7 @@ impl Application {
                     main_window.handle_motion_notify(position);
                 }
                 Event::WindowEvent {
-                    event: WindowEvent::MouseInput {
-                        state,
-                        ..
-                    },
+                    event: WindowEvent::MouseInput { state, .. },
                     ..
                 } => {
                     let main_window = self.window().unwrap();
@@ -228,7 +225,7 @@ impl Application {
                 Event::MainEventsCleared => {
                     gl_context.window().request_redraw();
                 }
-                _ => ()
+                _ => (),
             }
         });
     }
@@ -244,4 +241,3 @@ impl Application {
         "en-US".into()
     }
 }
-
