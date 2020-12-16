@@ -43,8 +43,6 @@ use crate::region::Region;
 use crate::window;
 use crate::window::{FileDialogToken, IdleToken, TimerToken, WinHandler, WindowLevel};
 
-use skia_safe;
-
 pub struct Window {
     handler: RefCell<Box<dyn WinHandler>>,
     window_state: RefCell<WindowState>,

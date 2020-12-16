@@ -130,7 +130,7 @@ impl Application {
 
         fn create_surface(
             windowed_context: &WindowedContext,
-            fb_info: &FramebufferInfo,
+            fb_info: FramebufferInfo,
             gr_context: &mut skia_safe::gpu::Context,
         ) -> Result<skia_safe::Surface, Error> {
             let pixel_format = windowed_context.get_pixel_format();
@@ -139,7 +139,7 @@ impl Application {
                 (size.width.try_into()?, size.height.try_into()?),
                 pixel_format.multisampling.and_then(|s| s.try_into().ok()),
                 pixel_format.stencil_bits.try_into()?,
-                *fb_info,
+                fb_info,
             );
             Surface::from_backend_render_target(
                 gr_context,
@@ -152,7 +152,7 @@ impl Application {
             .ok_or_else(|| anyhow!("No window"))
         };
 
-        let mut surface = create_surface(&gl_context, &fb_info, &mut gr_context)?;
+        let mut surface = create_surface(&gl_context, fb_info, &mut gr_context)?;
         let sf = gl_context.window().scale_factor() as f32;
         surface.canvas().scale((sf, sf));
 
@@ -187,7 +187,7 @@ impl Application {
                     ..
                 } => {
                     gl_context.resize(physical_size);
-                    surface = create_surface(&gl_context, &fb_info, &mut gr_context).unwrap();
+                    surface = create_surface(&gl_context, fb_info, &mut gr_context).unwrap();
                     // TODO something with these unwraps
                 }
                 Event::WindowEvent {
