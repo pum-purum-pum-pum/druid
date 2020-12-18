@@ -1,4 +1,4 @@
-// Copyright 2020 The Druid Authors.
+// Copyright 2020 The Druid Authors#.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,8 @@ use crate::kurbo::{Point, Rect, Size, Vec2};
 
 use crate::piet::{Piet, PietText};
 
-use glutin::dpi::PhysicalPosition;
+use glutin::dpi::{PhysicalPosition, PhysicalSize};
+use anyhow::{anyhow, Error as AnyError};
 
 use super::application::Application;
 use super::error::Error;
@@ -36,7 +37,7 @@ use crate::common_util::IdleCallback;
 use crate::dialog::{FileDialogOptions, FileDialogType};
 use crate::error::Error as ShellError;
 use crate::keyboard::Modifiers;
-use crate::scale::{Scale, ScaledArea};
+use crate::scale::{Scalable, Scale, ScaledArea};
 
 use crate::mouse::{Cursor, CursorDesc, MouseButton, MouseButtons, MouseEvent};
 use crate::region::Region;
@@ -47,13 +48,17 @@ pub struct Window {
     handler: RefCell<Box<dyn WinHandler>>,
     window_state: RefCell<WindowState>,
     idle_queue: Arc<Mutex<Vec<IdleKind>>>,
+    //size: Cell<(f64, f64)>,
 }
 
 impl Window {
-    pub fn render(&self, canvas: &mut skia_safe::Canvas) -> Result<(), Error> {
-        let mut invalid = Region::EMPTY;
-        // TODO rewrite
-        invalid.add_rect(Rect::new(0., 0., 1000., 1000.));
+    pub fn render(&self, canvas: &mut skia_safe::Canvas) -> Result<(), AnyError> {
+        //let mut invalid = Region::EMPTY;
+        // TODO fix double buffering
+        self.invalidate();
+        let invalid = std::mem::replace(&mut borrow_mut!(self.window_state)?.invalid, Region::EMPTY);
+        let invalid = invalid;
+        //invalid.add_rect(Rect::new(0., 0., size.0, size.1));
         let mut piet_ctx = Piet::new(canvas);
         let mut win_handler = borrow_mut!(self.handler).unwrap();
 
@@ -63,7 +68,7 @@ impl Window {
 
     #[track_caller]
     fn with_handler<T, F: FnOnce(&mut dyn WinHandler) -> T>(&self, f: F) -> Option<T> {
-        if self.handler.try_borrow_mut().is_err() || self.window_state.try_borrow_mut().is_err() {
+        if self.handler.try_borrow_mut().is_err() || self.state_mut().is_err() {
             log::error!("other RefCells were borrowed when calling into the handler");
             return None;
         }
@@ -88,6 +93,10 @@ impl Window {
     pub fn connect(&self, handle: WindowHandle) {
         self.with_handler_and_dont_check_the_other_borrows(|h| {
             h.connect(&handle.into());
+            // TODO hack for us to handle our fancy screens on working laptops
+            #[cfg(target_arch = "x86_64")]
+            h.scale(Scale::new(2., 2.));
+            #[cfg(target_arch = "aarch64")]
             h.scale(Scale::default());
             h.size(Size::new(1000., 1000.)) // TODO
         });
@@ -122,9 +131,27 @@ impl Window {
         //}
     }
 
+    fn state_mut(&self) -> Result<std::cell::RefMut<WindowState>, AnyError> {
+        borrow_mut!(self.window_state)
+    }
+
+    pub(crate) fn state(&self) -> Result<std::cell::Ref<WindowState>, AnyError> {
+        borrow!(self.window_state)
+    }
+
+    pub fn screen_size_changed(&self, physical_size: PhysicalSize<u32>) -> Result<(), AnyError> {
+        let scale = self.state()?.scale;
+        let size = Size::new(physical_size.width as f64, physical_size.height as f64).to_dp(scale);
+        
+        self.state_mut()?.size = Size::new(physical_size.width as f64, physical_size.height as f64);
+        self.with_handler(|h| h.size(size));
+        Ok(())
+    }
+
     pub fn handle_motion_notify(&self, physical_position: PhysicalPosition<f64>) {
+        let scale = self.state().unwrap().scale; // TODO unwrap
         let mouse_event = MouseEvent {
-            pos: Point::new(physical_position.x, physical_position.y),
+            pos: Point::new(physical_position.x, physical_position.y).to_dp(scale),
             buttons: MouseButtons::new(),
             mods: Modifiers::empty(), // TODO
             count: 0,
@@ -136,8 +163,9 @@ impl Window {
     }
 
     pub fn handle_button_press(&self, physical_position: PhysicalPosition<f64>) {
+        let scale = self.state().unwrap().scale; // TODO unwrap
         let mouse_event = MouseEvent {
-            pos: Point::new(physical_position.x, physical_position.y),
+            pos: Point::new(physical_position.x, physical_position.y).to_dp(scale),
             buttons: MouseButtons::new(),
             mods: Modifiers::empty(), // TODO
             count: 1,
@@ -149,8 +177,9 @@ impl Window {
     }
 
     pub fn handle_button_release(&self, physical_position: PhysicalPosition<f64>) {
+        let scale = self.state().unwrap().scale; // TODO unwrap
         let mouse_event = MouseEvent {
-            pos: Point::new(physical_position.x, physical_position.y),
+            pos: Point::new(physical_position.x, physical_position.y).to_dp(scale),
             buttons: MouseButtons::new(),
             mods: Modifiers::empty(), // TODO
             count: 0,
@@ -175,6 +204,30 @@ impl Window {
     //        };
     //        self.with_handler(|h| h.mouse_up(&mouse_event));
     //    }
+   
+    fn request_anim_frame(&self) {
+        // TODO
+    }
+
+    pub fn invalidate(&self) {
+        match self.state().map(|state| state.size) {
+            Ok(size) => self.invalidate_rect(size.to_rect()),
+            Err(err) => log::error!("Window::invalidate - failed to get size: {}", err),
+        } 
+    }
+
+    pub fn invalidate_rect(&self, rect: Rect) {
+        if let Err(err) = self.add_invalid_rect(rect) {
+            log::error!("Window::invalidate_rect - failed to enlarge rect: {}", err);
+        }
+        self.request_anim_frame();
+    }
+
+    pub fn add_invalid_rect(&self, rect: Rect) -> Result<(), AnyError> {
+        self.state_mut()?
+            .invalid.add_rect(rect);
+        Ok(())
+    }
 }
 
 /// Builder abstraction for creating new windows.
@@ -244,11 +297,12 @@ impl IdleHandle {
     }
 }
 
-struct WindowState {
-    _scale: Cell<Scale>,
+pub(crate) struct WindowState {
+    pub(crate) scale: Scale,
     _area: Cell<ScaledArea>,
     _idle_queue: Arc<Mutex<Vec<IdleKind>>>,
-    _invalid: RefCell<Region>,
+    size: Size,
+    invalid: Region,
 }
 
 // TODO: support custom cursors
@@ -311,10 +365,11 @@ impl WindowBuilder {
         let handler = self.handler.unwrap();
         // TODO
         let state = WindowState {
-            _scale: Cell::new(Scale::default()),
+            scale: Scale::new(2., 2.),
             _area: Cell::new(ScaledArea::default()),
             _idle_queue: Default::default(),
-            _invalid: RefCell::new(Region::EMPTY),
+            size: Size::new(1000., 1000.), // TODO
+            invalid: Region::EMPTY,
         };
         let window = Rc::new(Window {
             handler: RefCell::new(handler),
@@ -389,17 +444,17 @@ impl WindowHandle {
         self.render_soon();
     }
 
-    pub fn invalidate_rect(&self, _rect: Rect) {
-        log::warn!("TODO invalidate rect");
-        //unimplemented!();
-        //if let Some(s) = self.0.upgrade() {
-        //    s.invalid.borrow_mut().add_rect(rect);
-        //}
-        //self.render_soon();
+    pub fn invalidate_rect(&self, rect: Rect) {
+        if let Some(window) = self.0.upgrade() {
+            window.invalidate_rect(rect);
+        }
+        self.request_anim_frame();
     }
 
     pub fn invalidate(&self) {
-        self.render_soon();
+        if let Some(window) = self.0.upgrade() {
+            window.invalidate();
+        }
     }
 
     pub fn text(&self) -> PietText {

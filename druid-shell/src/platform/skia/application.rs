@@ -19,11 +19,12 @@ use std::convert::TryInto;
 use std::rc::Rc;
 
 use crate::application::AppHandler;
+use crate::scale::{Scalable, Scale, ScaledArea};
 
 use super::clipboard::Clipboard;
 use super::window::Window;
 
-use glutin::dpi::PhysicalPosition;
+use glutin::dpi::{PhysicalPosition, PhysicalSize};
 
 const WIDTH: usize = 800;
 const HEIGHT: usize = 600;
@@ -153,8 +154,16 @@ impl Application {
         };
 
         let mut surface = create_surface(&gl_context, fb_info, &mut gr_context)?;
-        let sf = gl_context.window().scale_factor() as f32;
-        surface.canvas().scale((sf, sf));
+        // It's not working on wayland for some reason.
+        //let sf = gl_context.window().scale_factor() as f32;
+        //surface.canvas().scale((sf, sf));
+
+        let scale = if let Ok(window) = self.window() {
+            window.state().unwrap().scale
+        } else {
+            Scale::default()
+        };
+        surface.canvas().scale((scale.x() as f32, scale.y() as f32));
 
         let mut cursor_position = PhysicalPosition::new(0., 0.);
         event_loop.run(move |event, _, control_flow| {
@@ -187,16 +196,18 @@ impl Application {
                     ..
                 } => {
                     gl_context.resize(physical_size);
-                    surface = create_surface(&gl_context, fb_info, &mut gr_context).unwrap();
                     // TODO something with these unwraps
+                    surface = create_surface(&gl_context, fb_info, &mut gr_context).unwrap();
+                    surface.canvas().scale((scale.x() as f32, scale.y() as f32));
+                    let mut main_window = self.window().unwrap();
+                    main_window.screen_size_changed(physical_size);
                 }
                 Event::WindowEvent {
                     event: WindowEvent::CursorMoved { position, .. },
                     ..
                 } => {
                     cursor_position = position;
-                    let mut state = borrow_mut!(self.state).unwrap();
-                    let main_window = state.window.as_mut().unwrap();
+                    let main_window = self.window().unwrap();
                     main_window.handle_motion_notify(position);
                 }
                 Event::WindowEvent {
