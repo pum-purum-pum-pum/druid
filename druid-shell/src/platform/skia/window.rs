@@ -20,6 +20,7 @@ use std::ffi::OsString;
 use std::panic::Location;
 use std::rc::{Rc, Weak};
 use std::sync::{Arc, Mutex};
+use std::collections::BinaryHeap;
 
 use instant::Instant;
 
@@ -38,27 +39,30 @@ use crate::dialog::{FileDialogOptions, FileDialogType};
 use crate::error::Error as ShellError;
 use crate::keyboard::Modifiers;
 use crate::scale::{Scalable, Scale, ScaledArea};
+use super::util::{self, Timer};
 
 use crate::mouse::{Cursor, CursorDesc, MouseButton, MouseButtons, MouseEvent};
 use crate::region::Region;
 use crate::window;
 use crate::window::{FileDialogToken, IdleToken, TimerToken, WinHandler, WindowLevel};
 
+
 pub struct Window {
     handler: RefCell<Box<dyn WinHandler>>,
     window_state: RefCell<WindowState>,
     idle_queue: Arc<Mutex<Vec<IdleKind>>>,
+    timer_queue: Mutex<BinaryHeap<Timer>>,
     //size: Cell<(f64, f64)>,
 }
 
 impl Window {
     pub fn render(&self, canvas: &mut skia_safe::Canvas) -> Result<(), AnyError> {
-        //let mut invalid = Region::EMPTY;
+        // important for AnimStart and invalidation of required regions
+        self.with_handler(|h| h.prepare_paint());
         // TODO fix double buffering
         self.invalidate();
         let invalid = std::mem::replace(&mut borrow_mut!(self.window_state)?.invalid, Region::EMPTY);
         let invalid = invalid;
-        //invalid.add_rect(Rect::new(0., 0., size.0, size.1));
         let mut piet_ctx = Piet::new(canvas);
         let mut win_handler = borrow_mut!(self.handler).unwrap();
 
@@ -130,8 +134,27 @@ impl Window {
         //    }
         //}
     }
+    
+    pub(crate) fn next_timeout(&self) -> Option<Instant> {
+        if let Some(timer) = self.timer_queue.lock().unwrap().peek() {
+            Some(timer.deadline())
+        } else {
+            None
+        }
+    }
 
-    fn state_mut(&self) -> Result<std::cell::RefMut<WindowState>, AnyError> {
+    pub(crate) fn run_timers(&self, now: Instant) {
+        while let Some(deadline) = self.next_timeout() {
+            if deadline > now {
+                break;
+            }
+            // Remove the timer and get the token
+            let token = self.timer_queue.lock().unwrap().pop().unwrap().token();
+            self.with_handler(|h| h.timer(token));
+        }
+    }
+
+    pub(crate) fn state_mut(&self) -> Result<std::cell::RefMut<WindowState>, AnyError> {
         borrow_mut!(self.window_state)
     }
 
@@ -170,7 +193,7 @@ impl Window {
             mods: Modifiers::empty(), // TODO
             count: 1,
             focus: false,
-            button: MouseButton::None,
+            button: MouseButton::Left,
             wheel_delta: Vec2::ZERO,
         };
         self.with_handler(|h| h.mouse_down(&mouse_event));
@@ -184,7 +207,7 @@ impl Window {
             mods: Modifiers::empty(), // TODO
             count: 0,
             focus: false,
-            button: MouseButton::None,
+            button: MouseButton::Left,
             wheel_delta: Vec2::ZERO,
         };
         self.with_handler(|h| h.mouse_up(&mouse_event));
@@ -205,8 +228,23 @@ impl Window {
     //        self.with_handler(|h| h.mouse_up(&mouse_event));
     //    }
    
+    /// Schedule a redraw on the idle loop, or if we are waiting on present then schedule it for
+    /// when the current present finishes.
     fn request_anim_frame(&self) {
-        // TODO
+        //if let Ok(true) = self.waiting_on_present() {
+        //    if let Err(e) = self.set_needs_present(true) {
+        //        log::error!(
+        //            "Window::request_anim_frame - failed to schedule present: {}",
+        //            e
+        //        );
+        //    }
+        //} else {
+        //    let idle = IdleHandle {
+        //        queue: Arc::clone(&self.idle_queue),
+        //        pipe: self.idle_pipe,
+        //    };
+        //    idle.schedule_redraw();
+        //}
     }
 
     pub fn invalidate(&self) {
@@ -375,6 +413,7 @@ impl WindowBuilder {
             handler: RefCell::new(handler),
             window_state: RefCell::new(state),
             idle_queue: Arc::new(Mutex::new(Vec::new())),
+            timer_queue: Mutex::new(BinaryHeap::new()),
         });
 
         let handle = WindowHandle(Rc::downgrade(&window));
@@ -386,7 +425,6 @@ impl WindowBuilder {
 
 impl WindowHandle {
     pub fn show(&self) {
-        self.render_soon();
     }
 
     pub fn resizable(&self, _resizable: bool) {
@@ -441,7 +479,6 @@ impl WindowHandle {
     }
 
     pub fn request_anim_frame(&self) {
-        self.render_soon();
     }
 
     pub fn invalidate_rect(&self, rect: Rect) {
@@ -462,14 +499,17 @@ impl WindowHandle {
             .0
             .upgrade()
             .unwrap_or_else(|| panic!("Failed to produce a text context"));
-
         PietText::new()
     }
 
-    pub fn request_timer(&self, _deadline: Instant) -> TimerToken {
-        log::warn!("TODO timer token");
-        TimerToken::next()
-        //unimplemented!()
+    pub fn request_timer(&self, deadline: Instant) -> TimerToken {
+        if let Some(w) = self.0.upgrade() {
+            let timer = Timer::new(deadline);
+            w.timer_queue.lock().unwrap().push(timer);
+            timer.token()
+        } else {
+            TimerToken::INVALID
+        }
     }
 
     pub fn set_cursor(&mut self, _cursor: &Cursor) {}
@@ -487,17 +527,6 @@ impl WindowHandle {
     pub fn save_as(&mut self, _options: FileDialogOptions) -> Option<FileDialogToken> {
         log::warn!("save_as is currently unimplemented for web.");
         None
-    }
-
-    fn render_soon(&self) {
-        log::warn!("VLAD TODO unimplemented")
-        //if let Some(s) = self.0.upgrade() {
-        //    let state = s.clone();
-        //    s.request_animation_frame(move || {
-        //        state.render();
-        //    })
-        //    .expect("Failed to request animation frame");
-        //}
     }
 
     pub fn file_dialog(

@@ -17,9 +17,11 @@
 use std::cell::RefCell;
 use std::convert::TryInto;
 use std::rc::Rc;
+use std::time::{Duration, Instant};
 
 use crate::application::AppHandler;
 use crate::scale::{Scalable, Scale, ScaledArea};
+use crate::kurbo::{Point, Rect, Size, Vec2};
 
 use super::clipboard::Clipboard;
 use super::window::Window;
@@ -155,9 +157,9 @@ impl Application {
 
         let mut surface = create_surface(&gl_context, fb_info, &mut gr_context)?;
         // It's not working on wayland for some reason.
-        //let sf = gl_context.window().scale_factor() as f32;
+        let sf = gl_context.window().scale_factor() as f32;
         //surface.canvas().scale((sf, sf));
-
+        //self.window().unwrap().state_mut().unwrap().scale = Scale::new(sf as f64, sf as f64);
         let scale = if let Ok(window) = self.window() {
             window.state().unwrap().scale
         } else {
@@ -171,7 +173,12 @@ impl Application {
 
             let _size = gl_context.window().inner_size();
             let _size = (_size.width as f32, _size.height as f32);
-
+            {
+                let main_window = self.window().unwrap();
+                main_window.run_idle();
+                let now = Instant::now();
+                main_window.run_timers(now);
+            }
             match event {
                 Event::WindowEvent {
                     event: WindowEvent::CloseRequested,
