@@ -28,6 +28,7 @@ use crate::kurbo::{Point, Rect, Size, Vec2};
 
 use crate::piet::{Piet, PietText};
 
+use glutin::event::{Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 use glutin::dpi::{PhysicalPosition, PhysicalSize};
 use anyhow::{anyhow, Error as AnyError};
 
@@ -40,6 +41,9 @@ use crate::error::Error as ShellError;
 use crate::keyboard::Modifiers;
 use crate::scale::{Scalable, Scale, ScaledArea};
 use super::util::{self, Timer};
+use super::keycodes;
+
+use crate::keyboard::KeyState;
 
 use crate::mouse::{Cursor, CursorDesc, MouseButton, MouseButtons, MouseEvent};
 use crate::region::Region;
@@ -169,6 +173,49 @@ impl Window {
         self.state_mut()?.size = Size::new(physical_size.width as f64, physical_size.height as f64);
         self.with_handler(|h| h.size(size));
         Ok(())
+    }
+    
+    pub fn handle_key_press(&self, key_press: KeyboardInput) {
+        let state = match key_press.state {
+            glutin::event::ElementState::Pressed => {
+                KeyState::Down
+            }
+            glutin::event::ElementState::Released => {
+                KeyState::Up
+            }
+        };
+        let vk = key_press.virtual_keycode.unwrap();
+        use glutin::event::VirtualKeyCode::*;
+        use crate::Code;
+        let code = match vk {
+            Key0 => Code::Digit0,
+            Key1 => Code::Digit1,
+            Key2 => Code::Digit2,
+            Key3 => Code::Digit3,
+            Key4 => Code::Digit4,
+            Key5 => Code::Digit5,
+            Key6 => Code::Digit6,
+            Key7 => Code::Digit7,
+            Key8 => Code::Digit8,
+            Key9 => Code::Digit9,
+            _ => Code::Unidentified
+        };
+        // TODO mods
+        let mods = Modifiers::empty();
+        // TODO location
+        let location = crate::Location::Standard;
+        let key = keycodes::code_to_key(code, mods);
+
+        let key_event = crate::KeyEvent {
+            code,
+            key,
+            mods,
+            location,
+            state,
+            repeat: false,
+            is_composing: false,
+        };
+        self.with_handler(|h| h.key_down(key_event));
     }
 
     pub fn handle_motion_notify(&self, physical_position: PhysicalPosition<f64>) {

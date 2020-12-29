@@ -198,6 +198,17 @@ impl Application {
                 } => {
                     *control_flow = ControlFlow::Exit;
                 }
+                | Event::WindowEvent {
+                    event:
+                        WindowEvent::KeyboardInput {
+                            input,
+                            ..
+                        },
+                    ..
+                } => {
+                    let main_window = self.window().unwrap();
+                    main_window.handle_key_press(input);
+                }
                 Event::WindowEvent {
                     event: WindowEvent::Resized(physical_size),
                     ..
@@ -206,8 +217,8 @@ impl Application {
                     // TODO something with these unwraps
                     surface = create_surface(&gl_context, fb_info, &mut gr_context).unwrap();
                     surface.canvas().scale((scale.x() as f32, scale.y() as f32));
-                    let mut main_window = self.window().unwrap();
-                    main_window.screen_size_changed(physical_size);
+                    let main_window = self.window().unwrap();
+                    main_window.screen_size_changed(physical_size).unwrap();
                 }
                 Event::WindowEvent {
                     event: WindowEvent::CursorMoved { position, .. },
@@ -230,7 +241,6 @@ impl Application {
                             main_window.handle_button_release(cursor_position);
                         }
                     }
-                    dbg!("mouse_input");
                 }
                 Event::RedrawRequested(_) => {
                     let canvas = surface.canvas();
