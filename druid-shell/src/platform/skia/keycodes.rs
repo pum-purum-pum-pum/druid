@@ -15,7 +15,6 @@
 
 //! X11 keycode handling.
 
-use super::super::shared;
 //pub use super::super::shared::code_to_location;
 use crate::keyboard::{Code, KbKey, Modifiers};
 //use x11rb::protocol::xproto::Keycode;
@@ -195,10 +194,6 @@ pub fn code_to_key(code: Code, m: Modifiers) -> KbKey {
 
         _ => KbKey::Unidentified,
     }
-}
-
-pub fn translate_keycode() {
-    
 }
 
 //pub fn hardware_keycode_to_code(hw_keycode: Keycode) -> Code {

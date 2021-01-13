@@ -17,16 +17,15 @@
 use std::cell::RefCell;
 use std::convert::TryInto;
 use std::rc::Rc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use crate::application::AppHandler;
-use crate::scale::{Scalable, Scale, ScaledArea};
-use crate::kurbo::{Point, Rect, Size, Vec2};
+use crate::scale::Scale;
 
 use super::clipboard::Clipboard;
 use super::window::Window;
 
-use glutin::dpi::{PhysicalPosition, PhysicalSize};
+use glutin::dpi::PhysicalPosition;
 
 const WIDTH: usize = 800;
 const HEIGHT: usize = 600;
@@ -67,6 +66,13 @@ struct State {
 
 impl Application {
     pub fn new() -> Result<Application, Error> {
+        { // using functions from druid here to supress warnings without changing druid's code (and hence being upstream)
+            use crate::common_util::strip_access_key;
+            use super::super::shared::hardware_keycode_to_code;
+            strip_access_key("");
+            hardware_keycode_to_code(0);
+        }
+        //use super::super::strip_access_key;
         let state = Rc::new(RefCell::new(State {
             _quitting: false,
             window: None,
@@ -157,7 +163,7 @@ impl Application {
 
         let mut surface = create_surface(&gl_context, fb_info, &mut gr_context)?;
         // It's not working on wayland for some reason.
-        let sf = gl_context.window().scale_factor() as f32;
+        let _sf = gl_context.window().scale_factor() as f32;
         //surface.canvas().scale((sf, sf));
         //self.window().unwrap().state_mut().unwrap().scale = Scale::new(sf as f64, sf as f64);
         let scale = if let Ok(window) = self.window() {

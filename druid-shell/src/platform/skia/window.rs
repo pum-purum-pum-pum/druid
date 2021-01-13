@@ -28,9 +28,9 @@ use crate::kurbo::{Point, Rect, Size, Vec2};
 
 use crate::piet::{Piet, PietText};
 
-use glutin::event::{Event, KeyboardInput, VirtualKeyCode, WindowEvent};
+use glutin::event::KeyboardInput;
 use glutin::dpi::{PhysicalPosition, PhysicalSize};
-use anyhow::{anyhow, Error as AnyError};
+use anyhow::Error as AnyError;
 
 use super::application::Application;
 use super::error::Error;
@@ -40,7 +40,7 @@ use crate::dialog::{FileDialogOptions, FileDialogType};
 use crate::error::Error as ShellError;
 use crate::keyboard::Modifiers;
 use crate::scale::{Scalable, Scale, ScaledArea};
-use super::util::{self, Timer};
+use super::util::Timer;
 use super::keycodes;
 
 use crate::keyboard::KeyState;
@@ -184,10 +184,10 @@ impl Window {
                 KeyState::Up
             }
         };
-        let vk = key_press.virtual_keycode.unwrap();
+        let virtual_keycode = key_press.virtual_keycode.unwrap(); // TODO fix panic
         use glutin::event::VirtualKeyCode::*;
         use crate::Code;
-        let code = match vk {
+        let code = match virtual_keycode {
             Key0 => Code::Digit0,
             Key1 => Code::Digit1,
             Key2 => Code::Digit2,
@@ -198,6 +198,11 @@ impl Window {
             Key7 => Code::Digit7,
             Key8 => Code::Digit8,
             Key9 => Code::Digit9,
+            Up => Code::ArrowUp,
+            Down => Code::ArrowDown,
+            Left => Code::ArrowLeft,
+            Right => Code::ArrowRight,
+            Return => Code::Enter,
             _ => Code::Unidentified
         };
         // TODO mods
@@ -215,7 +220,14 @@ impl Window {
             repeat: false,
             is_composing: false,
         };
-        self.with_handler(|h| h.key_down(key_event));
+        match state {
+            KeyState::Down => {
+                self.with_handler(|h| h.key_down(key_event));
+            }
+            KeyState::Up => {
+                self.with_handler(|h| h.key_up(key_event));
+            }
+        }
     }
 
     pub fn handle_motion_notify(&self, physical_position: PhysicalPosition<f64>) {
