@@ -42,7 +42,8 @@ skia-safe = { git = "https://github.com/Vurich/rust-skia.git", features = ["gl",
 
 # NOTE: When changing the piet or kurbo versions, ensure that
 #       the kurbo version included in piet is compatible with the kurbo version specified here.
-piet-common = {path = "../../piet/piet-common"}
+# piet-common = {path = "../../piet/piet-common"}
+piet-common = {git = "https://github.com/pum-purum-pum-pum/piet.git"}
 kurbo = "0.7.0"
 
 log = "0.4.11"
@@ -99,6 +100,7 @@ version = "0.3.44"
 features = ["Window", "MouseEvent", "CssStyleDeclaration", "WheelEvent", "KeyEvent", "KeyboardEvent"]
 
 [dev-dependencies]
-piet-common = {path = "../../piet/piet-common"}
+piet-common = {git = "https://github.com/pum-purum-pum-pum/piet.git"}
+# piet-common = {path = "../../piet/piet-common"}
 simple_logger = { version = "1.9.0", default-features = false }
 static_assertions = "1.1.0"

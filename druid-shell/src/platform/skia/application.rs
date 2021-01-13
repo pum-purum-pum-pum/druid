@@ -67,9 +67,7 @@ struct State {
 impl Application {
     pub fn new() -> Result<Application, Error> {
         { // using functions from druid here to supress warnings without changing druid's code (and hence being upstream)
-            use crate::common_util::strip_access_key;
             use super::super::shared::hardware_keycode_to_code;
-            strip_access_key("");
             hardware_keycode_to_code(0);
         }
         //use super::super::strip_access_key;
