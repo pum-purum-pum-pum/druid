@@ -203,6 +203,7 @@ impl Window {
             Left => Code::ArrowLeft,
             Right => Code::ArrowRight,
             Return => Code::Enter,
+            Space => Code::Space,
             _ => Code::Unidentified
         };
         // TODO mods
