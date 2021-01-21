@@ -14,6 +14,7 @@
 
 //! Interacting with the system pasteboard/clipboard.
 pub use crate::platform::clipboard as platform;
+use crate::platform::custom::clipboard::ClipboardPlatform;
 
 /// A handle to the system clipboard.
 ///

@@ -15,6 +15,8 @@
 use crate::hotkey::HotKey;
 use crate::platform::menu as platform;
 
+use crate::platform::custom::window::MenuPlatform;
+
 /// A menu object.
 ///
 /// This may be a window menu, an application menu (macOS) or a context (right-click)

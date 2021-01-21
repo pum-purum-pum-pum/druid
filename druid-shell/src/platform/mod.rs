@@ -16,6 +16,8 @@
 
 // It would be clearer to use cfg_if! macros here, but that breaks rustfmt.
 
+pub mod custom;
+
 #[cfg(target_os = "windows")]
 mod windows;
 #[cfg(target_os = "windows")]

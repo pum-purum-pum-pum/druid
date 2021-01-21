@@ -23,6 +23,8 @@ use crate::error::Error;
 use crate::platform::application as platform;
 use crate::util;
 
+use crate::platform::custom::application::PlatformApplication;
+
 /// A top-level handler that is not associated with any window.
 ///
 /// This is most important on macOS, where it is entirely normal for

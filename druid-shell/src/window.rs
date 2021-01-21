@@ -30,6 +30,8 @@ use crate::region::Region;
 use crate::scale::Scale;
 use piet_common::PietText;
 
+use crate::platform::custom::window::WindowHandlePlatform;
+
 /// A token that uniquely identifies a running timer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Hash)]
 pub struct TimerToken(u64);
