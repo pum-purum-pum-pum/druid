@@ -13,7 +13,7 @@
 // limitations under the License.
 
 //! Interacting with the system pasteboard/clipboard.
-pub use crate::platform::clipboard as platform;
+//pub use crate::platform::clipboard as platform;
 use crate::platform::custom::clipboard::ClipboardPlatform;
 
 /// A handle to the system clipboard.
@@ -127,9 +127,9 @@ use crate::platform::custom::clipboard::ClipboardPlatform;
 /// [MIME types]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types
 /// [`ClipboardFormat`]: struct.ClipboardFormat.html
 #[derive(Debug, Clone)]
-pub struct Clipboard(platform::Clipboard);
+pub struct Clipboard<T: ClipboardPlatform>(T);
 
-impl Clipboard {
+impl<T: ClipboardPlatform> Clipboard<T> {
     /// Put a string onto the system clipboard.
     pub fn put_string(&mut self, s: impl AsRef<str>) {
         self.0.put_string(s);
@@ -209,8 +209,8 @@ impl From<&str> for ClipboardFormat {
     }
 }
 
-impl From<platform::Clipboard> for Clipboard {
-    fn from(src: platform::Clipboard) -> Clipboard {
+impl<T: ClipboardPlatform> From<T> for Clipboard<T> {
+    fn from(src: T) -> Clipboard<T> {
         Clipboard(src)
     }
 }

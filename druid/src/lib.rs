@@ -191,6 +191,8 @@ pub use shell::{
     WindowHandle, WindowState,
 };
 
+pub use shell::custom;
+
 pub use crate::core::WidgetPod;
 pub use app::{AppLauncher, WindowConfig, WindowDesc};
 pub use app_delegate::{AppDelegate, DelegateCtx};

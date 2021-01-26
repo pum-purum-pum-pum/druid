@@ -95,8 +95,8 @@ impl From<druid_shell::MouseEvent> for MouseEvent {
     }
 }
 
-impl Data for Cursor {
-    fn same(&self, other: &Cursor) -> bool {
+impl<T> Data for Cursor<T> {
+    fn same(&self, other: &Cursor<T>) -> bool {
         self == other
     }
 }

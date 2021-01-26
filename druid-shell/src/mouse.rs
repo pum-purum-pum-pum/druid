@@ -16,7 +16,6 @@
 
 use crate::kurbo::{Point, Vec2};
 use crate::piet::ImageBuf;
-use crate::platform;
 use crate::Modifiers;
 
 /// Information about the mouse event.
@@ -249,7 +248,7 @@ impl std::fmt::Debug for MouseButtons {
 //both Windows and macOS. We may want to provide polyfills for various additional cursors.
 /// Mouse cursors.
 #[derive(Clone, PartialEq)]
-pub enum Cursor {
+pub enum Cursor<CustomCursor> {
     /// The default arrow cursor.
     Arrow,
     /// A vertical I-beam, for indicating insertion points in text.
@@ -261,7 +260,7 @@ pub enum Cursor {
     ResizeUpDown,
     // The platform cursor should be small. Any image data that it uses should be shared (i.e.
     // behind an `Arc` or using a platform API that does the sharing).
-    Custom(platform::window::CustomCursor),
+    Custom(CustomCursor),
 }
 
 /// A platform-independent description of a custom cursor.
@@ -286,7 +285,7 @@ impl CursorDesc {
     }
 }
 
-impl std::fmt::Debug for Cursor {
+impl<CustomCursor> std::fmt::Debug for Cursor<CustomCursor> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Cursor::Arrow => write!(f, "Cursor::Arrow"),

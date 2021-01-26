@@ -30,27 +30,61 @@ use crate::{
     Data, Env, ExtEventSink, Insets, MenuDesc, Notification, Point, Rect, SingleUse, Size, Target,
     TimerToken, WidgetId, WindowConfig, WindowDesc, WindowHandle, WindowId,
 };
+use crate::custom::window::WindowHandlePlatform;
 
 /// A macro for implementing methods on multiple contexts.
 ///
 /// There are a lot of methods defined on multiple contexts; this lets us only
 /// have to write them out once.
 macro_rules! impl_context_method {
-    ($ty:ty,  { $($method:item)+ } ) => {
-        impl $ty { $($method)+ }
+    (
+        <$($args:ident)*> // generic parameters
+        $ty:ty, // implementor
+        where $( // bounds
+            $bounded_type:ident: $bound:tt,
+        )+
+        { $($method:item)+ } // methods
+    ) => {
+        impl<$($args)*> $ty where $(
+            $bounded_type : $bound,
+        )+ 
+        { 
+            $($method)+ 
+        }
     };
-    ( $ty:ty, $($more:ty),+, { $($method:item)+ } ) => {
-        impl_context_method!($ty, { $($method)+ });
-        impl_context_method!($($more),+, { $($method)+ });
+    (
+        <$($args:ident)*> // generic parameters
+        $ty:ty, $($more:ty),+, // implementors
+        where $( // bounds
+            $bounded_type:ident: $bound:tt,
+        )+
+        { $($method:item)+ } ) => 
+        {
+            impl_context_method!(
+                <$($args)*>
+                $ty,
+                where $(
+                    $bounded_type: $bound,
+                )+
+                { $($method)+ }
+            );
+            impl_context_method!(
+                <$($args)*>
+                $($more),+,
+                where $(
+                    $bounded_type: $bound,
+                )+
+                { $($method)+ }
+            );
     };
 }
 
 /// Static state that is shared between most contexts.
-pub(crate) struct ContextState<'a> {
+pub(crate) struct ContextState<'a, T: WindowHandlePlatform> {
     pub(crate) command_queue: &'a mut CommandQueue,
     pub(crate) ext_handle: &'a ExtEventSink,
     pub(crate) window_id: WindowId,
-    pub(crate) window: &'a WindowHandle,
+    pub(crate) window: &'a WindowHandle<T>,
     pub(crate) text: PietText,
     /// The id of the widget that currently has focus.
     pub(crate) focus_widget: Option<WidgetId>,
@@ -63,8 +97,8 @@ pub(crate) struct ContextState<'a> {
 /// in the widget's appearance, to schedule a repaint.
 ///
 /// [`request_paint`]: #method.request_paint
-pub struct EventCtx<'a, 'b> {
-    pub(crate) state: &'a mut ContextState<'b>,
+pub struct EventCtx<'a, 'b, T: WindowHandlePlatform> {
+    pub(crate) state: &'a mut ContextState<'b, T>,
     pub(crate) widget_state: &'a mut WidgetState,
     pub(crate) notifications: &'a mut VecDeque<Notification>,
     pub(crate) is_handled: bool,
@@ -80,9 +114,9 @@ pub struct EventCtx<'a, 'b> {
 /// [`lifecycle`]: trait.Widget.html#tymethod.lifecycle
 /// [`register_child`]: #method.register_child
 /// [`LifeCycle::WidgetAdded`]: enum.LifeCycle.html#variant.WidgetAdded
-pub struct LifeCycleCtx<'a, 'b> {
+pub struct LifeCycleCtx<'a, 'b, T: WindowHandlePlatform> {
     pub(crate) widget_state: &'a mut WidgetState,
-    pub(crate) state: &'a mut ContextState<'b>,
+    pub(crate) state: &'a mut ContextState<'b, T>,
 }
 
 /// A mutable context provided to data update methods of widgets.
@@ -91,8 +125,8 @@ pub struct LifeCycleCtx<'a, 'b> {
 /// in the widget's appearance, to schedule a repaint.
 ///
 /// [`request_paint`]: #method.request_paint
-pub struct UpdateCtx<'a, 'b> {
-    pub(crate) state: &'a mut ContextState<'b>,
+pub struct UpdateCtx<'a, 'b, T: WindowHandlePlatform> {
+    pub(crate) state: &'a mut ContextState<'b, T>,
     pub(crate) widget_state: &'a mut WidgetState,
     pub(crate) prev_env: Option<&'a Env>,
     pub(crate) env: &'a Env,
@@ -103,16 +137,16 @@ pub struct UpdateCtx<'a, 'b> {
 /// As of now, the main service provided is access to a factory for
 /// creating text layout objects, which are likely to be useful
 /// during widget layout.
-pub struct LayoutCtx<'a, 'b> {
-    pub(crate) state: &'a mut ContextState<'b>,
+pub struct LayoutCtx<'a, 'b, T: WindowHandlePlatform> {
+    pub(crate) state: &'a mut ContextState<'b, T>,
     pub(crate) widget_state: &'a mut WidgetState,
     pub(crate) mouse_pos: Option<Point>,
 }
 
 /// Z-order paint operations with transformations.
-pub(crate) struct ZOrderPaintOp {
+pub(crate) struct ZOrderPaintOp<T: WindowHandlePlatform> {
     pub z_index: u32,
-    pub paint_func: Box<dyn FnOnce(&mut PaintCtx) + 'static>,
+    pub paint_func: Box<dyn FnOnce(&mut PaintCtx<T>) + 'static>,
     pub transform: Affine,
 }
 
@@ -123,13 +157,13 @@ pub(crate) struct ZOrderPaintOp {
 /// This struct is expected to grow, for example to include the
 /// "damage region" indicating that only a subset of the entire
 /// widget hierarchy needs repainting.
-pub struct PaintCtx<'a, 'b, 'c> {
-    pub(crate) state: &'a mut ContextState<'b>,
+pub struct PaintCtx<'a, 'b, 'c, T: WindowHandlePlatform> {
+    pub(crate) state: &'a mut ContextState<'b, T>,
     pub(crate) widget_state: &'a WidgetState,
     /// The render context for actually painting.
     pub render_ctx: &'a mut Piet<'c>,
     /// The z-order paint operations.
-    pub(crate) z_ops: Vec<ZOrderPaintOp>,
+    pub(crate) z_ops: Vec<ZOrderPaintOp<T>>,
     /// The currently visible region.
     pub(crate) region: Region,
     /// The approximate depth in the tree at the time of painting.
@@ -138,11 +172,13 @@ pub struct PaintCtx<'a, 'b, 'c> {
 
 // methods on everyone
 impl_context_method!(
-    EventCtx<'_, '_>,
-    UpdateCtx<'_, '_>,
-    LifeCycleCtx<'_, '_>,
-    PaintCtx<'_, '_, '_>,
-    LayoutCtx<'_, '_>,
+    <T>
+    EventCtx<'_, '_, T>,
+    UpdateCtx<'_, '_, T>,
+    LifeCycleCtx<'_, '_, T>,
+    PaintCtx<'_, '_, '_, T>,
+    LayoutCtx<'_, '_, T>,
+    where T: WindowHandlePlatform,
     {
         /// get the `WidgetId` of the current widget.
         pub fn widget_id(&self) -> WidgetId {
@@ -150,7 +186,7 @@ impl_context_method!(
         }
 
         /// Returns a reference to the current `WindowHandle`.
-        pub fn window(&self) -> &WindowHandle {
+        pub fn window(&self) -> &WindowHandle<T> {
             &self.state.window
         }
 
@@ -168,10 +204,12 @@ impl_context_method!(
 
 // methods on everyone but layoutctx
 impl_context_method!(
-    EventCtx<'_, '_>,
-    UpdateCtx<'_, '_>,
-    LifeCycleCtx<'_, '_>,
-    PaintCtx<'_, '_, '_>,
+    <T>
+    EventCtx<'_, '_, T>,
+    UpdateCtx<'_, '_, T>,
+    LifeCycleCtx<'_, '_, T>,
+    PaintCtx<'_, '_, '_, T>,
+    where T: WindowHandlePlatform,
     {
         /// The layout size.
         ///
@@ -253,7 +291,11 @@ impl_context_method!(
     }
 );
 
-impl_context_method!(EventCtx<'_, '_>, UpdateCtx<'_, '_>, {
+impl_context_method!(
+    <T>
+    EventCtx<'_, '_, T>, UpdateCtx<'_, '_, T>, 
+    where T: WindowHandlePlatform,
+    {
     /// Set the cursor icon.
     ///
     /// This setting will be retained until [`clear_cursor`] is called, but it will only take
@@ -265,7 +307,7 @@ impl_context_method!(EventCtx<'_, '_>, UpdateCtx<'_, '_>, {
     /// [`override_cursor`]: EventCtx::override_cursor
     /// [`hot`]: EventCtx::is_hot
     /// [`active`]: EventCtx::is_active
-    pub fn set_cursor(&mut self, cursor: &Cursor) {
+    pub fn set_cursor(&mut self, cursor: &Cursor<T>) {
         self.widget_state.cursor_change = CursorChange::Set(cursor.clone());
     }
 
@@ -279,7 +321,7 @@ impl_context_method!(EventCtx<'_, '_>, UpdateCtx<'_, '_>, {
     /// [`set_cursor`]: EventCtx::override_cursor
     /// [`hot`]: EventCtx::is_hot
     /// [`active`]: EventCtx::is_active
-    pub fn override_cursor(&mut self, cursor: &Cursor) {
+    pub fn override_cursor(&mut self, cursor: &Cursor<T>) {
         self.widget_state.cursor_change = CursorChange::Override(cursor.clone());
     }
 
@@ -295,7 +337,10 @@ impl_context_method!(EventCtx<'_, '_>, UpdateCtx<'_, '_>, {
 });
 
 // methods on event, update, and lifecycle
-impl_context_method!(EventCtx<'_, '_>, UpdateCtx<'_, '_>, LifeCycleCtx<'_, '_>, {
+impl_context_method!(
+    <T> EventCtx<'_, '_, T>, UpdateCtx<'_, '_, T>, LifeCycleCtx<'_, '_, T>,
+    where T: WindowHandlePlatform,
+    {
     /// Request a [`paint`] pass. This is equivalent to calling
     /// [`request_paint_rect`] for the widget's [`paint_rect`].
     ///
@@ -347,7 +392,7 @@ impl_context_method!(EventCtx<'_, '_>, UpdateCtx<'_, '_>, LifeCycleCtx<'_, '_>, 
     /// `T` must be the application's root `Data` type (the type provided to [`AppLauncher::launch`]).
     ///
     /// [`AppLauncher::launch`]: struct.AppLauncher.html#method.launch
-    pub fn set_menu<T: Any>(&mut self, menu: MenuDesc<T>) {
+    pub fn set_menu<K: Any>(&mut self, menu: MenuDesc<K>) {
         self.state.set_menu(menu);
     }
 
@@ -378,10 +423,12 @@ impl_context_method!(EventCtx<'_, '_>, UpdateCtx<'_, '_>, LifeCycleCtx<'_, '_>, 
 
 // methods on everyone but paintctx
 impl_context_method!(
-    EventCtx<'_, '_>,
-    UpdateCtx<'_, '_>,
-    LifeCycleCtx<'_, '_>,
-    LayoutCtx<'_, '_>,
+    <T>
+    EventCtx<'_, '_, T>,
+    UpdateCtx<'_, '_, T>,
+    LifeCycleCtx<'_, '_, T>,
+    LayoutCtx<'_, '_, T>,
+    where T: WindowHandlePlatform,
     {
         /// Submit a [`Command`] to be run after this event is handled.
         ///
@@ -416,7 +463,7 @@ impl_context_method!(
     }
 );
 
-impl EventCtx<'_, '_> {
+impl<T> EventCtx<'_, '_, T> {
     /// Submit a [`Notification`].
     ///
     /// The provided argument can be a [`Selector`] or a [`Command`]; this lets
@@ -457,7 +504,7 @@ impl EventCtx<'_, '_> {
     /// `T` must be the application's root `Data` type (the type provided to [`AppLauncher::launch`]).
     ///
     /// [`AppLauncher::launch`]: struct.AppLauncher.html#method.launch
-    pub fn new_window<T: Any>(&mut self, desc: WindowDesc<T>) {
+    pub fn new_window<K: Any>(&mut self, desc: WindowDesc<K>) {
         if self.state.root_app_data_type == TypeId::of::<T>() {
             self.submit_command(
                 commands::NEW_WINDOW
@@ -473,7 +520,7 @@ impl EventCtx<'_, '_> {
     /// `T` must be the application's root `Data` type (the type provided to [`AppLauncher::launch`]).
     ///
     /// [`AppLauncher::launch`]: struct.AppLauncher.html#method.launch
-    pub fn show_context_menu<T: Any>(&mut self, menu: ContextMenu<T>) {
+    pub fn show_context_menu<K: Any>(&mut self, menu: ContextMenu<K>) {
         if self.state.root_app_data_type == TypeId::of::<T>() {
             self.submit_command(
                 commands::SHOW_CONTEXT_MENU
@@ -587,7 +634,7 @@ impl EventCtx<'_, '_> {
     }
 }
 
-impl UpdateCtx<'_, '_> {
+impl<T> UpdateCtx<'_, '_, T> {
     /// Returns `true` if this widget or a descendent as explicitly requested
     /// an update call.
     ///
@@ -618,7 +665,7 @@ impl UpdateCtx<'_, '_> {
     /// [`Env`]: struct.Env.html
     /// [`Key`]: struct.Key.html
     /// [`KeyOrValue`]: enum.KeyOrValue.html
-    pub fn env_key_changed<T>(&self, key: &impl KeyLike<T>) -> bool {
+    pub fn env_key_changed<K>(&self, key: &impl KeyLike<K>) -> bool {
         match self.prev_env.as_ref() {
             Some(prev) => key.changed(prev, self.env),
             None => false,
@@ -626,7 +673,7 @@ impl UpdateCtx<'_, '_> {
     }
 }
 
-impl LifeCycleCtx<'_, '_> {
+impl<T> LifeCycleCtx<'_, '_, T> {
     /// Registers a child widget.
     ///
     /// This should only be called in response to a `LifeCycle::WidgetAdded` event.
@@ -650,7 +697,7 @@ impl LifeCycleCtx<'_, '_> {
     }
 }
 
-impl LayoutCtx<'_, '_> {
+impl<T> LayoutCtx<'_, '_, T> {
     /// Set explicit paint [`Insets`] for this widget.
     ///
     /// You are not required to set explicit paint bounds unless you need
@@ -680,7 +727,7 @@ impl LayoutCtx<'_, '_> {
     }
 }
 
-impl PaintCtx<'_, '_, '_> {
+impl<T> PaintCtx<'_, '_, '_, T> {
     /// The depth in the tree of the currently painting widget.
     ///
     /// This may be used in combination with [`paint_with_z_index`] in order
@@ -706,7 +753,7 @@ impl PaintCtx<'_, '_, '_> {
     ///
     /// This is used by containers to ensure that their children have the correct
     /// visible region given their layout.
-    pub fn with_child_ctx(&mut self, region: impl Into<Region>, f: impl FnOnce(&mut PaintCtx)) {
+    pub fn with_child_ctx(&mut self, region: impl Into<Region>, f: impl FnOnce(&mut PaintCtx<T>)) {
         let mut child_ctx = PaintCtx {
             render_ctx: self.render_ctx,
             state: self.state,
@@ -740,7 +787,7 @@ impl PaintCtx<'_, '_, '_> {
     /// }
     /// # }
     /// ```
-    pub fn with_save(&mut self, f: impl FnOnce(&mut PaintCtx)) {
+    pub fn with_save(&mut self, f: impl FnOnce(&mut PaintCtx<T>)) {
         if let Err(e) = self.render_ctx.save() {
             log::error!("Failed to save RenderContext: '{}'", e);
             return;
@@ -759,7 +806,7 @@ impl PaintCtx<'_, '_, '_> {
     pub fn paint_with_z_index(
         &mut self,
         z_index: u32,
-        paint_func: impl FnOnce(&mut PaintCtx) + 'static,
+        paint_func: impl FnOnce(&mut PaintCtx<T>) + 'static,
     ) {
         let current_transform = self.render_ctx.current_transform();
         self.z_ops.push(ZOrderPaintOp {
@@ -770,11 +817,11 @@ impl PaintCtx<'_, '_, '_> {
     }
 }
 
-impl<'a> ContextState<'a> {
-    pub(crate) fn new<T: 'static>(
+impl<'a, T: WindowHandlePlatform> ContextState<'a, T> {
+    pub(crate) fn new<K: 'static>(
         command_queue: &'a mut CommandQueue,
         ext_handle: &'a ExtEventSink,
-        window: &'a WindowHandle,
+        window: &'a WindowHandle<T>,
         window_id: WindowId,
         focus_widget: Option<WidgetId>,
     ) -> Self {
@@ -785,7 +832,7 @@ impl<'a> ContextState<'a> {
             window_id,
             focus_widget,
             text: window.text(),
-            root_app_data_type: TypeId::of::<T>(),
+            root_app_data_type: TypeId::of::<K>(),
         }
     }
 
@@ -794,8 +841,8 @@ impl<'a> ContextState<'a> {
             .push_back(command.default_to(self.window_id.into()));
     }
 
-    fn set_menu<T: Any>(&mut self, menu: MenuDesc<T>) {
-        if self.root_app_data_type == TypeId::of::<T>() {
+    fn set_menu<K: Any>(&mut self, menu: MenuDesc<K>) {
+        if self.root_app_data_type == TypeId::of::<K>() {
             self.submit_command(
                 commands::SET_MENU
                     .with(Box::new(menu))
@@ -813,7 +860,7 @@ impl<'a> ContextState<'a> {
     }
 }
 
-impl<'c> Deref for PaintCtx<'_, '_, 'c> {
+impl<'c, T: WindowHandlePlatform> Deref for PaintCtx<'_, '_, 'c, T> {
     type Target = Piet<'c>;
 
     fn deref(&self) -> &Self::Target {
@@ -821,7 +868,7 @@ impl<'c> Deref for PaintCtx<'_, '_, 'c> {
     }
 }
 
-impl<'c> DerefMut for PaintCtx<'_, '_, 'c> {
+impl<'c, T: WindowHandlePlatform> DerefMut for PaintCtx<'_, '_, 'c, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.render_ctx
     }

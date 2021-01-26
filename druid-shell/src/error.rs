@@ -16,23 +16,25 @@
 
 use std::fmt;
 use std::sync::Arc;
+use crate::platform::custom::application::ApplicationPlatform;
+use crate::platform::custom::error::PlatformError;
 
-use crate::platform::error as platform;
+//use crate::platform::error as platform;
 
 /// Shell errors.
 #[derive(Debug, Clone)]
-pub enum Error {
+pub enum Error<T: std::error::Error> {
     /// The Application instance has already been created.
     ApplicationAlreadyExists,
     /// The window has already been destroyed.
     WindowDropped,
     /// Platform specific error.
-    Platform(platform::Error),
+    Platform(T),
     /// Other miscellaneous error.
     Other(Arc<anyhow::Error>),
 }
 
-impl fmt::Display for Error {
+impl<T: std::error::Error> fmt::Display for Error<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
             Error::ApplicationAlreadyExists => {
@@ -45,16 +47,29 @@ impl fmt::Display for Error {
     }
 }
 
-impl std::error::Error for Error {}
+impl<T: std::error::Error> std::error::Error for Error<T> {}
 
-impl From<anyhow::Error> for Error {
-    fn from(src: anyhow::Error) -> Error {
+impl<T: std::error::Error> From<anyhow::Error> for Error<T> {
+    fn from(src: anyhow::Error) -> Error<T> {
         Error::Other(Arc::new(src))
     }
 }
 
-impl From<platform::Error> for Error {
-    fn from(src: platform::Error) -> Error {
+impl<T: PlatformError> From<T> for Error<T> {
+    fn from(src: T) -> Error<T> {
         Error::Platform(src)
     }
 }
+
+//impl<K: std::error::Error, T> From<K> for Error<K> where T: ApplicationPlatform<Error=K> {
+//    fn from(src: T::Error) -> Error<K> {
+//        Error::Platform(src)
+//    }
+//}
+
+// TODO traits rm
+//impl<T: std::error::Error> From<T> for Error<T> {
+//    fn from(src: T) -> Error<T> {
+//        Error::Platform(src)
+//    }
+//}

@@ -64,6 +64,7 @@ pub struct Window {
 impl WindowPlatform for Window {
     type RendererContext = skia_safe::Canvas;
     type WindowHandle = WindowHandle;
+    
     fn render(&self, canvas: &mut skia_safe::Canvas) -> Result<(), AnyError> {
         // important for AnimStart and invalidation of required regions
         self.with_handler(|h| h.prepare_paint());
@@ -92,7 +93,6 @@ impl WindowPlatform for Window {
 }
 
 impl Window {
-
     #[track_caller]
     fn with_handler<T, F: FnOnce(&mut dyn WinHandler) -> T>(&self, f: F) -> Option<T> {
         if self.handler.try_borrow_mut().is_err() || self.state_mut().is_err() {
@@ -115,18 +115,6 @@ impl Window {
                 None
             }
         }
-    }
-
-    pub fn connect(&self, handle: WindowHandle) {
-        self.with_handler_and_dont_check_the_other_borrows(|h| {
-            h.connect(&handle.into());
-            // TODO hack for us to handle our fancy screens on working laptops
-            #[cfg(target_arch = "x86_64")]
-            h.scale(Scale::new(2., 2.));
-            #[cfg(target_arch = "aarch64")]
-            h.scale(Scale::default());
-            h.size(Size::new(1000., 1000.)) // TODO
-        });
     }
 
     pub(crate) fn run_idle(&self) {

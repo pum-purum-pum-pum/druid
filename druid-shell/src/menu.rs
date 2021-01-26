@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use crate::hotkey::HotKey;
-use crate::platform::menu as platform;
+//use crate::platform::menu as platform;
 
 use crate::platform::custom::window::MenuPlatform;
 
@@ -27,29 +27,29 @@ use crate::platform::custom::window::MenuPlatform;
 /// Currently, a menu and its items cannot be changed once created. If you need
 /// to change anything about a menu (for instance, disabling or selecting items)
 /// you need to create a new menu with the desired properties.
-pub struct Menu(platform::Menu);
+pub struct Menu<T: MenuPlatform>(T);
 
-impl Menu {
+impl<T: MenuPlatform> Menu<T> {
     /// Create a new empty window or application menu.
-    pub fn new() -> Menu {
-        Menu(platform::Menu::new())
+    pub fn new() -> Menu<T> {
+        Menu(T::new())
     }
 
     /// Create a new empty context menu.
     ///
     /// Some platforms distinguish between these types of menus, and some
     /// do not.
-    pub fn new_for_popup() -> Menu {
-        Menu(platform::Menu::new_for_popup())
+    pub fn new_for_popup() -> Menu<T> {
+        Menu(T::new_for_popup())
     }
 
     /// Consume this `Menu`, returning the platform menu object.
-    pub(crate) fn into_inner(self) -> platform::Menu {
+    pub(crate) fn into_inner(self) -> T {
         self.0
     }
 
     /// Add the provided `Menu` as a submenu of self, with the provided title.
-    pub fn add_dropdown(&mut self, menu: Menu, text: &str, enabled: bool) {
+    pub fn add_dropdown(&mut self, menu: Menu<T>, text: &str, enabled: bool) {
         self.0.add_dropdown(menu.0, text, enabled)
     }
 

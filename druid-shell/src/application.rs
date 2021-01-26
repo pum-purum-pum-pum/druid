@@ -20,10 +20,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::clipboard::Clipboard;
 use crate::error::Error;
-use crate::platform::application as platform;
+//use crate::platform::application as platform;
 use crate::util;
 
-use crate::platform::custom::application::PlatformApplication;
+use crate::platform::custom::application::ApplicationPlatform;
 
 /// A top-level handler that is not associated with any window.
 ///
@@ -48,8 +48,8 @@ pub trait AppHandler {
 ///
 /// This can be thought of as a reference and it can be safely cloned.
 #[derive(Clone)]
-pub struct Application {
-    pub(crate) platform_app: platform::Application,
+pub struct Application<T: ApplicationPlatform> {
+    pub(crate) platform_app: T,
     state: Rc<RefCell<State>>,
 }
 
@@ -61,12 +61,14 @@ struct State {
 /// Used to ensure only one Application instance is ever created.
 static APPLICATION_CREATED: AtomicBool = AtomicBool::new(false);
 
-thread_local! {
-    /// A reference object to the current `Application`, if any.
-    static GLOBAL_APP: RefCell<Option<Application>> = RefCell::new(None);
-}
+// TODO traits rm
+// removed while making druid generic over platform traits
+//thread_local! {
+//    /// A reference object to the current `Application`, if any.
+//    static GLOBAL_APP: RefCell<Option<Application>> = RefCell::new(None);
+//}
 
-impl Application {
+impl<T: ApplicationPlatform> Application<T> {
     /// Create a new `Application`.
     ///
     /// # Errors
@@ -76,43 +78,45 @@ impl Application {
     /// This may change in the future. See [druid#771] for discussion.
     ///
     /// [druid#771]: https://github.com/linebender/druid/issues/771
-    pub fn new() -> Result<Application, Error> {
+    pub fn new() -> Result<Application<T>, Error<T::Error>> {
         APPLICATION_CREATED
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
             .map_err(|_| Error::ApplicationAlreadyExists)?;
         util::claim_main_thread();
-        let platform_app = platform::Application::new()?;
+        let platform_app = T::new()?;
         let state = Rc::new(RefCell::new(State { running: false }));
         let app = Application {
             platform_app,
             state,
         };
-        GLOBAL_APP.with(|global_app| {
-            *global_app.borrow_mut() = Some(app.clone());
-        });
+        // TODO traits rm
+        //GLOBAL_APP.with(|global_app| {
+        //    *global_app.borrow_mut() = Some(app.clone());
+        //});
         Ok(app)
     }
 
-    /// Get the current globally active `Application`.
-    ///
-    /// A globally active `Application` exists
-    /// after [`new`] is called and until [`run`] returns.
-    ///
-    /// # Panics
-    ///
-    /// Panics if there is no globally active `Application`.
-    /// For a non-panicking function use [`try_global`].
-    ///
-    /// This function will also panic if called from a non-main thread.
-    ///
-    /// [`new`]: #method.new
-    /// [`run`]: #method.run
-    /// [`try_global`]: #method.try_global
-    #[inline]
-    pub fn global() -> Application {
-        // Main thread assertion takes place in try_global()
-        Application::try_global().expect("There is no globally active Application")
-    }
+    // TODO traits rm
+    ///// Get the current globally active `Application`.
+    /////
+    ///// A globally active `Application` exists
+    ///// after [`new`] is called and until [`run`] returns.
+    /////
+    ///// # Panics
+    /////
+    ///// Panics if there is no globally active `Application`.
+    ///// For a non-panicking function use [`try_global`].
+    /////
+    ///// This function will also panic if called from a non-main thread.
+    /////
+    ///// [`new`]: #method.new
+    ///// [`run`]: #method.run
+    ///// [`try_global`]: #method.try_global
+    //#[inline]
+    //pub fn global() -> Application<T> {
+    //    // Main thread assertion takes place in try_global()
+    //    Application::try_global().expect("There is no globally active Application")
+    //}
 
     /// Get the current globally active `Application`.
     ///
@@ -125,10 +129,11 @@ impl Application {
     ///
     /// [`new`]: #method.new
     /// [`run`]: #method.run
-    pub fn try_global() -> Option<Application> {
-        util::assert_main_thread();
-        GLOBAL_APP.with(|global_app| global_app.borrow().clone())
-    }
+    // TODO traits rm
+//    pub fn try_global() -> Option<Application> {
+//        util::assert_main_thread();
+//        GLOBAL_APP.with(|global_app| global_app.borrow().clone())
+//    }
 
     /// Start the `Application` runloop.
     ///
@@ -155,9 +160,10 @@ impl Application {
         self.platform_app.run(handler);
 
         // This application is no longer active, so clear the global reference
-        GLOBAL_APP.with(|global_app| {
-            *global_app.borrow_mut() = None;
-        });
+        // TODO traits rm
+        //GLOBAL_APP.with(|global_app| {
+        //    *global_app.borrow_mut() = None;
+        //});
         // .. and release the main thread
         util::release_main_thread();
     }
@@ -185,7 +191,7 @@ impl Application {
     }
 
     /// Returns a handle to the system clipboard.
-    pub fn clipboard(&self) -> Clipboard {
+    pub fn clipboard(&self) -> Clipboard<T::Clipboard> {
         self.platform_app.clipboard().into()
     }
 
@@ -195,6 +201,6 @@ impl Application {
     ///
     /// [Unicode language identifier]: https://unicode.org/reports/tr35/#Unicode_language_identifier
     pub fn get_locale() -> String {
-        platform::Application::get_locale()
+        T::get_locale()
     }
 }

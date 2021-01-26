@@ -25,12 +25,13 @@ use crate::keyboard::KeyEvent;
 use crate::kurbo::{Point, Rect, Size};
 use crate::menu::Menu;
 use crate::mouse::{Cursor, CursorDesc, MouseEvent};
-use crate::platform::window as platform;
 use crate::region::Region;
 use crate::scale::Scale;
 use piet_common::PietText;
 
-use crate::platform::custom::window::WindowHandlePlatform;
+use crate::platform::custom::window::{WindowHandlePlatform, WindowBuilderPlatform,IdleHandlePlatform};
+use crate::platform::custom::application::ApplicationPlatform;
+//use crate::platform::window as platform;
 
 /// A token that uniquely identifies a running timer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Hash)]
@@ -60,9 +61,9 @@ impl TimerToken {
 //NOTE: this has a From<platform::Handle> impl for construction
 /// A handle that can enqueue tasks on the window loop.
 #[derive(Clone)]
-pub struct IdleHandle(platform::IdleHandle);
+pub struct IdleHandle<T: IdleHandlePlatform>(T);
 
-impl IdleHandle {
+impl<T: IdleHandlePlatform> IdleHandle<T> {
     /// Add an idle handler, which is called (once) when the message loop
     /// is empty. The idle handler will be run from the main UI thread, and
     /// won't be scheduled if the associated view has been dropped.
@@ -144,9 +145,10 @@ pub enum WindowState {
 
 /// A handle to a platform window object.
 #[derive(Clone, Default)]
-pub struct WindowHandle(platform::WindowHandle);
+pub struct WindowHandle<T: WindowHandlePlatform>(T);
+// pub struct WindowHandle(Box<dyn WindowHandlePlatform>);
 
-impl WindowHandle {
+impl<T: WindowHandlePlatform> WindowHandle<T> {
     /// Make this window visible.
     ///
     /// This is part of the initialization process; it should only be called
@@ -261,7 +263,7 @@ impl WindowHandle {
     }
 
     /// Set the top-level menu for this window.
-    pub fn set_menu(&self, menu: Menu) {
+    pub fn set_menu(&self, menu: Menu<T::Menu>) {
         self.0.set_menu(menu.into_inner())
     }
 
@@ -285,11 +287,11 @@ impl WindowHandle {
     }
 
     /// Set the cursor icon.
-    pub fn set_cursor(&mut self, cursor: &Cursor) {
+    pub fn set_cursor(&mut self, cursor: &Cursor<T::CustomCursor>) {
         self.0.set_cursor(cursor)
     }
 
-    pub fn make_cursor(&self, desc: &CursorDesc) -> Option<Cursor> {
+    pub fn make_cursor(&self, desc: &CursorDesc) -> Option<Cursor<T::CustomCursor>> {
         self.0.make_cursor(desc)
     }
 
@@ -314,12 +316,12 @@ impl WindowHandle {
     /// Display a pop-up menu at the given position.
     ///
     /// `pos` is in the coordinate space of the window.
-    pub fn show_context_menu(&self, menu: Menu, pos: Point) {
+    pub fn show_context_menu(&self, menu: Menu<T::Menu>, pos: Point) {
         self.0.show_context_menu(menu.into_inner(), pos)
     }
 
     /// Get a handle that can be used to schedule an idle task.
-    pub fn get_idle_handle(&self) -> Option<IdleHandle> {
+    pub fn get_idle_handle(&self) -> Option<IdleHandle<T::IdleHandle>> {
         self.0.get_idle_handle().map(IdleHandle)
     }
 
@@ -328,26 +330,26 @@ impl WindowHandle {
     /// The returned [`Scale`](crate::Scale) is a copy and thus its information will be stale after
     /// the platform DPI changes. This means you should not stash it and rely on it later; it is
     /// only guaranteed to be valid for the current pass of the runloop.
-    pub fn get_scale(&self) -> Result<Scale, Error> {
+    pub fn get_scale(&self) -> Result<Scale, Error<T::Error>> {
         self.0.get_scale().map_err(Into::into)
     }
 }
 
 /// A builder type for creating new windows.
-pub struct WindowBuilder(platform::WindowBuilder);
+pub struct WindowBuilder<T: WindowBuilderPlatform>(T);
 
-impl WindowBuilder {
+impl<T: WindowBuilderPlatform> WindowBuilder<T> {
     /// Create a new `WindowBuilder`.
     ///
     /// Takes the [`Application`](crate::Application) that this window is for.
-    pub fn new(app: Application) -> WindowBuilder {
-        WindowBuilder(platform::WindowBuilder::new(app.platform_app))
+    pub fn new(app: Application<T::Application>) -> WindowBuilder<T> {
+        WindowBuilder(T::new(app.platform_app))
     }
 
     /// Set the [`WinHandler`] for this window.
     ///
     /// This is the object that will receive callbacks from this window.
-    pub fn set_handler(&mut self, handler: Box<dyn WinHandler>) {
+    pub fn set_handler(&mut self, handler: Box<dyn WinHandler<T::WindowHandle>>) {
         self.0.set_handler(handler)
     }
 
@@ -400,7 +402,7 @@ impl WindowBuilder {
     }
 
     /// Set the window's menu.
-    pub fn set_menu(&mut self, menu: Menu) {
+    pub fn set_menu(&mut self, menu: Menu<T::Menu>) {
         self.0.set_menu(menu.into_inner())
     }
 
@@ -412,7 +414,7 @@ impl WindowBuilder {
     /// Attempt to construct the platform window.
     ///
     /// If this fails, your application should exit.
-    pub fn build(self) -> Result<WindowHandle, Error> {
+    pub fn build(self) -> Result<WindowHandle<T::WindowHandle>, Error<T::Error>> {
         self.0.build().map(WindowHandle).map_err(Into::into)
     }
 }
@@ -423,13 +425,13 @@ impl WindowBuilder {
 /// The methods are non-mut because the window procedure can be called
 /// recursively; implementers are expected to use `RefCell` or the like,
 /// but should be careful to keep the lifetime of the borrow short.
-pub trait WinHandler {
+pub trait WinHandler<T: WindowHandlePlatform> {
     /// Provide the handler with a handle to the window so that it can
     /// invalidate or make other requests.
     ///
     /// This method passes the `WindowHandle` directly, because the handler may
     /// wish to stash it.
-    fn connect(&mut self, handle: &WindowHandle);
+    fn connect(&mut self, handle: &WindowHandle<T>);
 
     /// Called when the size of the window has changed.
     ///
@@ -562,18 +564,19 @@ pub trait WinHandler {
     fn as_any(&mut self) -> &mut dyn Any;
 }
 
-impl From<platform::WindowHandle> for WindowHandle {
-    fn from(src: platform::WindowHandle) -> WindowHandle {
+impl<T: WindowHandlePlatform> From<T> for WindowHandle<T> {
+    fn from(src: T) -> WindowHandle<T> {
         WindowHandle(src)
     }
 }
 
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    use static_assertions as sa;
-
-    sa::assert_not_impl_any!(WindowHandle: Send, Sync);
-    sa::assert_impl_all!(IdleHandle: Send);
-}
+// TODO traits rm
+//#[cfg(test)]
+//mod test {
+//    use super::*;
+//
+//    use static_assertions as sa;
+//
+//    sa::assert_not_impl_any!(WindowHandle: Send, Sync);
+//    sa::assert_impl_all!(IdleHandle: Send);
+//}

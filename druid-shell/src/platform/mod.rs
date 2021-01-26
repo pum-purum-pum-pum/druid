@@ -38,12 +38,12 @@ pub use x11::*;
 pub(crate) mod shared;
 
 // Make skia default backend. TODO probably remove when no more needed
-#[cfg(all(not(feature = "x11"), target_os = "linux"))]
-mod skia;
-#[cfg(all(not(feature = "x11"), target_os = "linux"))]
-pub use skia::*;
-// TODO
-pub(crate) mod shared;
+//#[cfg(all(not(feature = "x11"), target_os = "linux"))]
+//mod custom_skia;
+//#[cfg(all(not(feature = "x11"), target_os = "linux"))]
+//pub use custom_skia::*;
+//// TODO
+//pub(crate) mod shared;
 
 #[cfg(target_arch = "wasm32")]
 mod web;

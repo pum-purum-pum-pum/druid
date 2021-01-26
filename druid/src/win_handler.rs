@@ -40,6 +40,8 @@ use crate::app::{PendingWindow, WindowConfig};
 use crate::command::sys as sys_cmd;
 use druid_shell::WindowBuilder;
 
+use crate::custom::window::WindowHandlePlatform;
+
 pub(crate) const RUN_COMMANDS_TOKEN: IdleToken = IdleToken::new(1);
 
 /// A token we are called back with if an external event was submitted.
@@ -821,7 +823,7 @@ impl<T: Data> crate::shell::AppHandler for AppHandler<T> {
     }
 }
 
-impl<T: Data> WinHandler for DruidHandler<T> {
+impl<T: Data, K: WindowHandlePlatform> WinHandler<K> for DruidHandler<T> {
     fn connect(&mut self, handle: &WindowHandle) {
         self.app_state
             .connect_window(self.window_id, handle.clone());

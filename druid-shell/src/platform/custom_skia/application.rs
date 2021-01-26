@@ -71,6 +71,19 @@ impl PlatformApplication for Application {
     type Window = Window;
     type Clipboard = Clipboard;
 
+    fn new() -> Result<Application, Error> {
+        { // using functions from druid here to supress warnings without changing druid's code (and hence being upstream)
+            use super::super::shared::hardware_keycode_to_code;
+            hardware_keycode_to_code(0);
+        }
+        //use super::super::strip_access_key;
+        let state = Rc::new(RefCell::new(State {
+            _quitting: false,
+            window: None,
+        }));
+        Ok(Application { state })
+    }
+
     fn add_window(&self, window: Rc<Window>) -> Result<(), Error> {
         borrow_mut!(self.state)?.window = Some(window);
         Ok(())
@@ -264,22 +277,6 @@ impl PlatformApplication for Application {
     fn get_locale() -> String {
         //TODO ahem
         "en-US".into()
-    }
-
-}
-
-impl Application {
-    pub fn new() -> Result<Application, Error> {
-        { // using functions from druid here to supress warnings without changing druid's code (and hence being upstream)
-            use super::super::shared::hardware_keycode_to_code;
-            hardware_keycode_to_code(0);
-        }
-        //use super::super::strip_access_key;
-        let state = Rc::new(RefCell::new(State {
-            _quitting: false,
-            window: None,
-        }));
-        Ok(Application { state })
     }
 
 }
