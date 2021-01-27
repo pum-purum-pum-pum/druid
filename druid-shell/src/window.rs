@@ -145,10 +145,9 @@ pub enum WindowState {
 
 /// A handle to a platform window object.
 #[derive(Clone, Default)]
-pub struct WindowHandle<T: WindowHandlePlatform>(T);
-// pub struct WindowHandle(Box<dyn WindowHandlePlatform>);
+pub struct WindowHandle(Box<dyn WindowHandlePlatform>);
 
-impl<T: WindowHandlePlatform> WindowHandle<T> {
+impl WindowHandle {
     /// Make this window visible.
     ///
     /// This is part of the initialization process; it should only be called
