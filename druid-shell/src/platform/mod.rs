@@ -35,12 +35,19 @@ pub use x11::*;
 #[cfg(all(feature = "x11", target_os = "linux"))]
 pub(crate) mod shared;
 
-// Make skia default backend. TODO probably remove when no more needed
-#[cfg(all(not(feature = "x11"), target_os = "linux"))]
+#[cfg(all(feature = "gtk", target_os = "linux"))]
+mod gtk;
+#[cfg(all(feature = "gtk", target_os = "linux"))]
+pub use self::gtk::*;
+#[cfg(all(feature = "gtk", target_os = "linux"))]
+pub(crate) mod shared;
+
+//#[cfg(all(not(all(feature = "x11", feature = "gtk")), target_os = "linux"))]
+#[cfg(all(feature = "skia", target_os = "linux"))]
 mod skia;
-#[cfg(all(not(feature = "x11"), target_os = "linux"))]
+#[cfg(all(feature = "skia", target_os = "linux"))]
 pub use skia::*;
-// TODO
+#[cfg(all(feature = "skia", target_os = "linux"))]
 pub(crate) mod shared;
 
 #[cfg(target_arch = "wasm32")]

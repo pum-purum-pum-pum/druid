@@ -14,9 +14,14 @@ rustdoc-args = ["--cfg", "docsrs"]
 default-target = "x86_64-pc-windows-msvc"
 
 [features]
-default = ["gtk"]
-gtk = ["gio", "gdk", "gdk-sys", "glib", "glib-sys", "gtk-sys", "gtk-rs", "gdk-pixbuf"]
-x11 = ["x11rb", "nix", "cairo-sys-rs"]
+default = []
+
+winit_wayland = ["glutin", "skia-safe", "skia-safe/wayland", "glutin/wayland", "skia"]
+winit_x11 = ["glutin", "skia-safe", "skia-safe/x11", "glutin/x11", "skia"]
+
+skia = ["piet-common/skia"]
+gtk = ["gio", "gdk", "gdk-sys", "glib", "glib-sys", "gtk-sys", "gtk-rs", "gdk-pixbuf", "cairo-rs", "piet-common/cairo"]
+x11 = ["x11rb", "nix", "cairo-rs", "cairo-sys-rs", "piet-common/cairo"]
 
 # passing on all the image features. AVIF is not supported because it does not
 # support decoding, and that's all we use `Image` for.
@@ -37,8 +42,8 @@ hdr = ["piet-common/hdr"]
 
 [dependencies]
 gl = "0.14"
-glutin = { version = "0.25", features = ["wayland"], default_features = false }
-skia-safe = { git = "https://github.com/Vurich/rust-skia.git", features = ["gl", "wayland", "nightly", "lottie", "textlayout"] }
+glutin = { version = "0.25", default_features = false, optional = true }
+skia-safe = { git = "https://github.com/Vurich/rust-skia.git",waylandatures = ["gl", "lottie", "textlayout"], optional = true }
 
 # NOTE: When changing the piet or kurbo versions, ensure that
 #       the kurbo version included in piet is compatible with the kurbo version specified here.
@@ -78,7 +83,7 @@ bitflags = "1.2.1"
 
 [target.'cfg(target_os="linux")'.dependencies]
 # TODO(x11/dependencies): only use feature "xcb" if using X11
-#cairo-rs = { version = "0.9.1", default_features = false, features = ["xcb"] }
+cairo-rs = { version = "0.9.1", default_features = false, features = ["xcb"], optional = true }
 cairo-sys-rs = { version = "0.10.0", default_features = false, optional = true }
 gio = { version = "0.9.1", optional = true }
 gdk = { version = "0.13.2", optional = true }
