@@ -59,6 +59,21 @@ pub struct Window {
     //size: Cell<(f64, f64)>,
 }
 
+pub fn convert_mouse_button(mouse_button: glutin::event::MouseButton) -> Option<MouseButton> {
+    match mouse_button {
+        glutin::event::MouseButton::Left => {
+            Some(MouseButton::Left)
+        }
+        glutin::event::MouseButton::Right => {
+            Some(MouseButton::Right)
+        }
+        glutin::event::MouseButton::Middle => {
+            Some(MouseButton::Middle)
+        }
+        _ => None
+    }
+}
+
 impl Window {
     pub fn render(&self, canvas: &mut skia_safe::Canvas) -> Result<(), AnyError> {
         // important for AnimStart and invalidation of required regions
@@ -245,32 +260,36 @@ impl Window {
         self.with_handler(|h| h.mouse_move(&mouse_event));
     }
 
-    pub fn handle_button_press(&self, physical_position: PhysicalPosition<f64>) {
-        let scale = self.state().unwrap().scale; // TODO unwrap
-        let mouse_event = MouseEvent {
-            pos: Point::new(physical_position.x, physical_position.y).to_dp(scale),
-            buttons: MouseButtons::new(),
-            mods: Modifiers::empty(), // TODO
-            count: 1,
-            focus: false,
-            button: MouseButton::Left,
-            wheel_delta: Vec2::ZERO,
-        };
-        self.with_handler(|h| h.mouse_down(&mouse_event));
+    pub fn handle_button_press(&self, physical_position: PhysicalPosition<f64>, mouse_button: glutin::event::MouseButton) {
+        if let Some(button) = convert_mouse_button(mouse_button) {
+            let scale = self.state().unwrap().scale; // TODO unwrap
+            let mouse_event = MouseEvent {
+                pos: Point::new(physical_position.x, physical_position.y).to_dp(scale),
+                buttons: MouseButtons::new(),
+                mods: Modifiers::empty(), // TODO
+                count: 1,
+                focus: false,
+                button,
+                wheel_delta: Vec2::ZERO,
+            };
+            self.with_handler(|h| h.mouse_down(&mouse_event));
+        }
     }
 
-    pub fn handle_button_release(&self, physical_position: PhysicalPosition<f64>) {
-        let scale = self.state().unwrap().scale; // TODO unwrap
-        let mouse_event = MouseEvent {
-            pos: Point::new(physical_position.x, physical_position.y).to_dp(scale),
-            buttons: MouseButtons::new(),
-            mods: Modifiers::empty(), // TODO
-            count: 0,
-            focus: false,
-            button: MouseButton::Left,
-            wheel_delta: Vec2::ZERO,
-        };
-        self.with_handler(|h| h.mouse_up(&mouse_event));
+    pub fn handle_button_release(&self, physical_position: PhysicalPosition<f64>, mouse_button: glutin::event::MouseButton) {
+        if let Some(button) = convert_mouse_button(mouse_button) {
+            let scale = self.state().unwrap().scale; // TODO unwrap
+            let mouse_event = MouseEvent {
+                pos: Point::new(physical_position.x, physical_position.y).to_dp(scale),
+                buttons: MouseButtons::new(),
+                mods: Modifiers::empty(), // TODO
+                count: 0,
+                focus: false,
+                button,
+                wheel_delta: Vec2::ZERO,
+            };
+            self.with_handler(|h| h.mouse_up(&mouse_event));
+        }
     }
     //    pub fn handle_button_release(&self, button_release: &xproto::ButtonReleaseEvent) {
     //        let button = mouse_button(button_release.detail);

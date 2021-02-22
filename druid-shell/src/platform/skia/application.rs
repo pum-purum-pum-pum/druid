@@ -233,16 +233,16 @@ impl Application {
                     main_window.handle_motion_notify(position);
                 }
                 Event::WindowEvent {
-                    event: WindowEvent::MouseInput { state, .. },
+                    event: WindowEvent::MouseInput { button, state, .. },
                     ..
                 } => {
                     let main_window = self.window().unwrap();
                     match state {
                         glutin::event::ElementState::Pressed => {
-                            main_window.handle_button_press(cursor_position);
+                            main_window.handle_button_press(cursor_position, button);
                         }
                         glutin::event::ElementState::Released => {
-                            main_window.handle_button_release(cursor_position);
+                            main_window.handle_button_release(cursor_position, button);
                         }
                     }
                 }
