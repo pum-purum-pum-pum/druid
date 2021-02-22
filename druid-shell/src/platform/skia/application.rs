@@ -99,8 +99,9 @@ impl Application {
     }
 
     pub fn run_inner(self) -> Result<(), Error> {
+        let window_size = self.window().unwrap().size()?;
         let event_loop = EventLoop::new();
-        let logical_window_size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
+        let logical_window_size = LogicalSize::new(window_size.width, window_size.height);
 
         // Open a window.
         let window_builder = WindowBuilder::new()

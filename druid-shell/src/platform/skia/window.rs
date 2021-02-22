@@ -113,7 +113,8 @@ impl Window {
         }
     }
 
-    pub fn connect(&self, handle: WindowHandle) {
+    pub fn connect(&self, handle: WindowHandle) -> Result<(), AnyError>{
+        let size = self.size()?;
         self.with_handler_and_dont_check_the_other_borrows(|h| {
             h.connect(&handle.into());
             // TODO hack for us to handle our fancy screens on working laptops
@@ -121,8 +122,14 @@ impl Window {
             h.scale(Scale::new(2., 2.));
             #[cfg(target_arch = "aarch64")]
             h.scale(Scale::default());
-            h.size(Size::new(1000., 1000.)) // TODO
+            h.size(size)
         });
+        Ok(())
+    }
+
+    // TODO this is pub temporary cause we are using it to create window from application.rs
+    pub fn size(&self) -> Result<Size, AnyError> {
+        Ok(borrow!(self.window_state)?.size)
     }
 
     pub(crate) fn run_idle(&self) {
@@ -347,15 +354,6 @@ impl Window {
     }
 }
 
-/// Builder abstraction for creating new windows.
-pub(crate) struct WindowBuilder {
-    app: Application,
-    handler: Option<Box<dyn WinHandler>>,
-    title: String,
-    _cursor: Cursor,
-    menu: Option<Menu>,
-}
-
 #[derive(Clone, Default)]
 pub struct WindowHandle(Weak<Window>);
 
@@ -426,6 +424,16 @@ pub(crate) struct WindowState {
 #[derive(Clone, PartialEq)]
 pub struct CustomCursor;
 
+/// Builder abstraction for creating new windows.
+pub(crate) struct WindowBuilder {
+    app: Application,
+    handler: Option<Box<dyn WinHandler>>,
+    title: String,
+    _cursor: Cursor,
+    menu: Option<Menu>,
+    size: Size
+}
+
 impl WindowBuilder {
     pub fn new(app: Application) -> WindowBuilder {
         WindowBuilder {
@@ -434,6 +442,7 @@ impl WindowBuilder {
             title: String::new(),
             _cursor: Cursor::Arrow,
             menu: None,
+            size: Size::new(800., 600.)
         }
     }
 
@@ -442,8 +451,8 @@ impl WindowBuilder {
         self.handler = Some(handler);
     }
 
-    pub fn set_size(&mut self, _: Size) {
-        // Ignored
+    pub fn set_size(&mut self, size: Size) {
+        self.size = size;
     }
 
     pub fn set_min_size(&mut self, _: Size) {
@@ -485,7 +494,7 @@ impl WindowBuilder {
             scale: Scale::new(2., 2.),
             _area: Cell::new(ScaledArea::default()),
             _idle_queue: Default::default(),
-            size: Size::new(1000., 1000.), // TODO
+            size: self.size,
             invalid: Region::EMPTY,
         };
         let window = Rc::new(Window {
