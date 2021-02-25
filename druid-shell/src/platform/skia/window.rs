@@ -196,7 +196,9 @@ impl Window {
             glutin::event::ElementState::Pressed => KeyState::Down,
             glutin::event::ElementState::Released => KeyState::Up,
         };
-        let virtual_keycode = key_press.virtual_keycode.unwrap(); // TODO fix panic
+        let virtual_keycode = key_press.virtual_keycode;
+        if virtual_keycode.is_none() {return} // TODO
+        let virtual_keycode = virtual_keycode.unwrap();
         use crate::Code;
         use glutin::event::VirtualKeyCode::*;
         let code = match virtual_keycode {
@@ -216,6 +218,32 @@ impl Window {
             Right => Code::ArrowRight,
             Return => Code::Enter,
             Space => Code::Space,
+            Q => Code::KeyQ,
+            W => Code::KeyW,
+            E => Code::KeyE,
+            R => Code::KeyR,
+            T => Code::KeyT,
+            Y => Code::KeyY,
+            U => Code::KeyU,
+            I => Code::KeyI,
+            O => Code::KeyO,
+            P => Code::KeyP,
+            A => Code::KeyA,
+            S => Code::KeyS,
+            D => Code::KeyD,
+            F => Code::KeyF,
+            G => Code::KeyG,
+            H => Code::KeyH,
+            J => Code::KeyJ,
+            K => Code::KeyK,
+            L => Code::KeyL,
+            Z => Code::KeyZ,
+            X => Code::KeyX,
+            C => Code::KeyC,
+            V => Code::KeyV,
+            B => Code::KeyB,
+            N => Code::KeyN,
+            M => Code::KeyM,
             _ => Code::Unidentified,
         };
         // TODO mods
