@@ -16,11 +16,11 @@
 
 use std::any::Any;
 use std::cell::{Cell, RefCell};
+use std::collections::BinaryHeap;
 use std::ffi::OsString;
 use std::panic::Location;
 use std::rc::{Rc, Weak};
 use std::sync::{Arc, Mutex};
-use std::collections::BinaryHeap;
 
 use instant::Instant;
 
@@ -28,20 +28,20 @@ use crate::kurbo::{Point, Rect, Size, Vec2};
 
 use crate::piet::{Piet, PietText};
 
-use glutin::event::KeyboardInput;
-use glutin::dpi::{PhysicalPosition, PhysicalSize};
 use anyhow::Error as AnyError;
+use glutin::dpi::{PhysicalPosition, PhysicalSize};
+use glutin::event::KeyboardInput;
 
 use super::application::Application;
 use super::error::Error;
+use super::keycodes;
 use super::menu::Menu;
+use super::util::Timer;
 use crate::common_util::IdleCallback;
 use crate::dialog::{FileDialogOptions, FileDialogType};
 use crate::error::Error as ShellError;
 use crate::keyboard::Modifiers;
 use crate::scale::{Scalable, Scale, ScaledArea};
-use super::util::Timer;
-use super::keycodes;
 
 use crate::keyboard::KeyState;
 
@@ -49,7 +49,6 @@ use crate::mouse::{Cursor, CursorDesc, MouseButton, MouseButtons, MouseEvent};
 use crate::region::Region;
 use crate::window;
 use crate::window::{FileDialogToken, IdleToken, TimerToken, WinHandler, WindowLevel};
-
 
 pub struct Window {
     handler: RefCell<Box<dyn WinHandler>>,
@@ -61,16 +60,10 @@ pub struct Window {
 
 pub fn convert_mouse_button(mouse_button: glutin::event::MouseButton) -> Option<MouseButton> {
     match mouse_button {
-        glutin::event::MouseButton::Left => {
-            Some(MouseButton::Left)
-        }
-        glutin::event::MouseButton::Right => {
-            Some(MouseButton::Right)
-        }
-        glutin::event::MouseButton::Middle => {
-            Some(MouseButton::Middle)
-        }
-        _ => None
+        glutin::event::MouseButton::Left => Some(MouseButton::Left),
+        glutin::event::MouseButton::Right => Some(MouseButton::Right),
+        glutin::event::MouseButton::Middle => Some(MouseButton::Middle),
+        _ => None,
     }
 }
 
@@ -80,7 +73,8 @@ impl Window {
         self.with_handler(|h| h.prepare_paint());
         // TODO fix double buffering
         self.invalidate();
-        let invalid = std::mem::replace(&mut borrow_mut!(self.window_state)?.invalid, Region::EMPTY);
+        let invalid =
+            std::mem::replace(&mut borrow_mut!(self.window_state)?.invalid, Region::EMPTY);
         let invalid = invalid;
         let mut piet_ctx = Piet::new(canvas);
         let mut win_handler = borrow_mut!(self.handler).unwrap();
@@ -113,7 +107,7 @@ impl Window {
         }
     }
 
-    pub fn connect(&self, handle: WindowHandle) -> Result<(), AnyError>{
+    pub fn connect(&self, handle: WindowHandle) -> Result<(), AnyError> {
         let size = self.size()?;
         self.with_handler_and_dont_check_the_other_borrows(|h| {
             h.connect(&handle.into());
@@ -160,7 +154,7 @@ impl Window {
         //    }
         //}
     }
-    
+
     pub(crate) fn next_timeout(&self) -> Option<Instant> {
         if let Some(timer) = self.timer_queue.lock().unwrap().peek() {
             Some(timer.deadline())
@@ -191,24 +185,20 @@ impl Window {
     pub fn screen_size_changed(&self, physical_size: PhysicalSize<u32>) -> Result<(), AnyError> {
         let scale = self.state()?.scale;
         let size = Size::new(physical_size.width as f64, physical_size.height as f64).to_dp(scale);
-        
+
         self.state_mut()?.size = Size::new(physical_size.width as f64, physical_size.height as f64);
         self.with_handler(|h| h.size(size));
         Ok(())
     }
-    
+
     pub fn handle_key_press(&self, key_press: KeyboardInput) {
         let state = match key_press.state {
-            glutin::event::ElementState::Pressed => {
-                KeyState::Down
-            }
-            glutin::event::ElementState::Released => {
-                KeyState::Up
-            }
+            glutin::event::ElementState::Pressed => KeyState::Down,
+            glutin::event::ElementState::Released => KeyState::Up,
         };
         let virtual_keycode = key_press.virtual_keycode.unwrap(); // TODO fix panic
-        use glutin::event::VirtualKeyCode::*;
         use crate::Code;
+        use glutin::event::VirtualKeyCode::*;
         let code = match virtual_keycode {
             Key0 => Code::Digit0,
             Key1 => Code::Digit1,
@@ -226,7 +216,7 @@ impl Window {
             Right => Code::ArrowRight,
             Return => Code::Enter,
             Space => Code::Space,
-            _ => Code::Unidentified
+            _ => Code::Unidentified,
         };
         // TODO mods
         let mods = Modifiers::empty();
@@ -267,7 +257,11 @@ impl Window {
         self.with_handler(|h| h.mouse_move(&mouse_event));
     }
 
-    pub fn handle_button_press(&self, physical_position: PhysicalPosition<f64>, mouse_button: glutin::event::MouseButton) {
+    pub fn handle_button_press(
+        &self,
+        physical_position: PhysicalPosition<f64>,
+        mouse_button: glutin::event::MouseButton,
+    ) {
         if let Some(button) = convert_mouse_button(mouse_button) {
             let scale = self.state().unwrap().scale; // TODO unwrap
             let mouse_event = MouseEvent {
@@ -283,7 +277,11 @@ impl Window {
         }
     }
 
-    pub fn handle_button_release(&self, physical_position: PhysicalPosition<f64>, mouse_button: glutin::event::MouseButton) {
+    pub fn handle_button_release(
+        &self,
+        physical_position: PhysicalPosition<f64>,
+        mouse_button: glutin::event::MouseButton,
+    ) {
         if let Some(button) = convert_mouse_button(mouse_button) {
             let scale = self.state().unwrap().scale; // TODO unwrap
             let mouse_event = MouseEvent {
@@ -313,7 +311,7 @@ impl Window {
     //        };
     //        self.with_handler(|h| h.mouse_up(&mouse_event));
     //    }
-   
+
     /// Schedule a redraw on the idle loop, or if we are waiting on present then schedule it for
     /// when the current present finishes.
     fn request_anim_frame(&self) {
@@ -337,7 +335,7 @@ impl Window {
         match self.state().map(|state| state.size) {
             Ok(size) => self.invalidate_rect(size.to_rect()),
             Err(err) => log::error!("Window::invalidate - failed to get size: {}", err),
-        } 
+        }
     }
 
     pub fn invalidate_rect(&self, rect: Rect) {
@@ -348,8 +346,7 @@ impl Window {
     }
 
     pub fn add_invalid_rect(&self, rect: Rect) -> Result<(), AnyError> {
-        self.state_mut()?
-            .invalid.add_rect(rect);
+        self.state_mut()?.invalid.add_rect(rect);
         Ok(())
     }
 }
@@ -431,7 +428,7 @@ pub(crate) struct WindowBuilder {
     title: String,
     _cursor: Cursor,
     menu: Option<Menu>,
-    size: Size
+    size: Size,
 }
 
 impl WindowBuilder {
@@ -442,7 +439,7 @@ impl WindowBuilder {
             title: String::new(),
             _cursor: Cursor::Arrow,
             menu: None,
-            size: Size::new(800., 600.)
+            size: Size::new(800., 600.),
         }
     }
 
@@ -505,15 +502,14 @@ impl WindowBuilder {
         });
 
         let handle = WindowHandle(Rc::downgrade(&window));
-        window.connect(handle.clone());
+        window.connect(handle.clone()).unwrap();
         self.app.add_window(window).unwrap(); // TODO Vlad handle error here
         Ok(handle)
     }
 }
 
 impl WindowHandle {
-    pub fn show(&self) {
-    }
+    pub fn show(&self) {}
 
     pub fn resizable(&self, _resizable: bool) {
         log::warn!("resizable unimplemented for web");
@@ -566,8 +562,7 @@ impl WindowHandle {
         log::warn!("bring_to_frontand_focus unimplemented for web");
     }
 
-    pub fn request_anim_frame(&self) {
-    }
+    pub fn request_anim_frame(&self) {}
 
     pub fn invalidate_rect(&self, rect: Rect) {
         if let Some(window) = self.0.upgrade() {

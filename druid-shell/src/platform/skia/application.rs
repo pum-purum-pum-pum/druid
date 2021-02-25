@@ -27,9 +27,6 @@ use super::window::Window;
 
 use glutin::dpi::PhysicalPosition;
 
-const WIDTH: usize = 800;
-const HEIGHT: usize = 600;
-
 use glutin::dpi::LogicalSize;
 
 #[cfg(windows)]
@@ -66,7 +63,8 @@ struct State {
 
 impl Application {
     pub fn new() -> Result<Application, Error> {
-        { // using functions from druid here to supress warnings without changing druid's code (and hence being upstream)
+        {
+            // using functions from druid here to supress warnings without changing druid's code (and hence being upstream)
             use super::super::shared::hardware_keycode_to_code;
             hardware_keycode_to_code(0);
         }
@@ -203,12 +201,8 @@ impl Application {
                 } => {
                     *control_flow = ControlFlow::Exit;
                 }
-                | Event::WindowEvent {
-                    event:
-                        WindowEvent::KeyboardInput {
-                            input,
-                            ..
-                        },
+                Event::WindowEvent {
+                    event: WindowEvent::KeyboardInput { input, .. },
                     ..
                 } => {
                     let main_window = self.window().unwrap();

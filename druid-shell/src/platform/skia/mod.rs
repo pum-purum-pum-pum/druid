@@ -18,5 +18,5 @@ pub mod error;
 pub mod keycodes;
 pub mod menu;
 pub mod screen;
-pub mod window;
 pub mod util;
+pub mod window;
