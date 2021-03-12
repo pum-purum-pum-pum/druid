@@ -63,6 +63,7 @@ struct State {
 
 impl Application {
     pub fn new() -> Result<Application, Error> {
+        #[cfg(not(target_os = "macos"))]
         {
             // using functions from druid here to supress warnings without changing druid's code (and hence being upstream)
             use super::super::shared::hardware_keycode_to_code;
@@ -261,6 +262,12 @@ impl Application {
 
     pub fn clipboard(&self) -> Clipboard {
         Clipboard
+    }
+
+    pub fn hide(&self) {
+    }
+
+    pub fn hide_others(&self) {
     }
 
     pub fn get_locale() -> String {
