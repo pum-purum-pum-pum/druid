@@ -17,7 +17,7 @@
 use std::cell::RefCell;
 use std::convert::TryInto;
 use std::rc::Rc;
-use std::time::Instant;
+use std::time::{Instant, Duration};
 
 use crate::application::AppHandler;
 use crate::scale::Scale;
@@ -40,10 +40,14 @@ use glutin::{
 };
 use skia_safe::{
     gpu::{gl::FramebufferInfo, BackendRenderTarget, SurfaceOrigin},
-    ColorType, Surface,
+    ColorType, Surface, Canvas, Bitmap
 };
 
 use anyhow::{anyhow, Error};
+
+const TARGET_FPS: u64 = 60;
+/// Whether to render incrementaly in separate texture and then render it to screen
+const BLIT_CANVAS: bool = false; //false;
 
 type WindowedContext = glutin::ContextWrapper<glutin::PossiblyCurrent, glutin::window::Window>;
 
@@ -123,7 +127,7 @@ impl Application {
         gl::load_with(|name| gl_context.get_proc_address(name));
 
         let mut gr_context = skia_safe::gpu::Context::new_gl(None, None)
-            .ok_or_else(|| anyhow!("failder to create context"))?;
+            .ok_or_else(|| anyhow!("failed to create context"))?;
 
         let fb_info = {
             let mut fboid: gl::types::GLint = 0;
@@ -171,7 +175,24 @@ impl Application {
         };
         surface.canvas().scale((scale.x() as f32, scale.y() as f32));
 
+        let mut blit_bitmap = Bitmap::new();
+        fn create_blit_canvas<'a>(surface: &mut skia_safe::Surface, blit_bitmap: &mut Bitmap) -> skia_safe::OwnedCanvas<'a> {
+            let surface_image_info = surface.image_info();
+            blit_bitmap.alloc_n32_pixels((surface_image_info.width(), surface_image_info.height()), false);
+            let blit_canvas = Canvas::from_bitmap(&blit_bitmap, None);
+            blit_canvas
+        }
+        let mut blit_canvas = create_blit_canvas(&mut surface, &mut blit_bitmap);
+
         let mut cursor_position = PhysicalPosition::new(0., 0.);
+        let mut last_ts = Instant::now();
+        let mut time = Duration::default();
+        let mut frames_cnt = 0;
+        let mut redraw_timestamp = Instant::now();
+        // scheduler chould wake up us later so we want to say to it to wake up us earlier
+        // We can even calculate it dynamicly as some average :)
+        let scheduler_lag = Duration::from_millis(1);
+        let frame_time = Duration::from_secs_f64(1. / TARGET_FPS as f64) - scheduler_lag;
         event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Poll;
 
@@ -214,9 +235,14 @@ impl Application {
                     ..
                 } => {
                     gl_context.resize(physical_size);
+                    blit_canvas = create_blit_canvas(&mut surface, &mut blit_bitmap);
+                    if BLIT_CANVAS {
+                        blit_canvas.scale((scale.x() as f32, scale.y() as f32));
+                    } else {
+                        surface.canvas().scale((scale.x() as f32, scale.y() as f32));
+                    }
                     // TODO something with these unwraps
                     surface = create_surface(&gl_context, fb_info, &mut gr_context).unwrap();
-                    surface.canvas().scale((scale.x() as f32, scale.y() as f32));
                     let main_window = self.window().unwrap();
                     main_window.screen_size_changed(physical_size).unwrap();
                 }
@@ -243,17 +269,47 @@ impl Application {
                     }
                 }
                 Event::RedrawRequested(_) => {
-                    let canvas = surface.canvas();
-                    let main_window = self.window().unwrap();
-                    main_window.run_idle();
-                    main_window.render(canvas).unwrap();
-                    surface.canvas().flush();
-                    gl_context.swap_buffers().unwrap();
+                    {
+                        // frame rate
+                        frames_cnt += 1;
+                        let duration = Instant::now() - last_ts;
+                        time += duration;
+                        last_ts = Instant::now();
+                        if time > Duration::from_secs(1) {
+                            log::info!("{}", frames_cnt);
+                            frames_cnt = 0;
+                            time = time.max(Duration::from_secs(1)) - Duration::from_secs(1);
+                        }
+                    }
+                    if BLIT_CANVAS {
+                        let surface_canvas = surface.canvas();
+                        let main_window = self.window().unwrap();
+                        main_window.run_idle();
+                        main_window.render(&mut *blit_canvas).unwrap();
+                        blit_canvas.flush();
+                        surface_canvas.draw_bitmap(&blit_bitmap, skia_safe::Point::new(0., 0.), None);//Some(&paint));
+                        surface_canvas.flush();
+                        gl_context.swap_buffers().unwrap();
+                        redraw_timestamp = Instant::now();
+                    } else {
+                        let surface_canvas = surface.canvas();
+                        let main_window = self.window().unwrap();
+                        main_window.run_idle();
+                        main_window.render(&mut *surface_canvas).unwrap();
+                        surface_canvas.flush();
+                        gl_context.swap_buffers().unwrap();
+                        redraw_timestamp = Instant::now();
+                    }
                 }
-                Event::MainEventsCleared => {
-                    gl_context.window().request_redraw();
-                }
-                _ => (),
+                _ => {
+                    let since_last_redraw = Instant::now().duration_since(redraw_timestamp);
+                    if since_last_redraw > frame_time {
+                        gl_context.window().request_redraw();
+                    } else {
+                        let wait_time = frame_time - since_last_redraw;
+                        *control_flow = ControlFlow::WaitUntil(Instant::now() + wait_time);
+                    }
+                },
             }
         });
     }
@@ -264,10 +320,10 @@ impl Application {
         Clipboard
     }
 
-    pub fn hide(&self) {
+    pub fn _hide(&self) {
     }
 
-    pub fn hide_others(&self) {
+    pub fn _hide_others(&self) {
     }
 
     pub fn get_locale() -> String {

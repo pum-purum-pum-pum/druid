@@ -55,7 +55,6 @@ pub struct Window {
     window_state: RefCell<WindowState>,
     idle_queue: Arc<Mutex<Vec<IdleKind>>>,
     timer_queue: Mutex<BinaryHeap<Timer>>,
-    //size: Cell<(f64, f64)>,
 }
 
 pub fn convert_mouse_button(mouse_button: glutin::event::MouseButton) -> Option<MouseButton> {
@@ -71,15 +70,20 @@ impl Window {
     pub fn render(&self, canvas: &mut skia_safe::Canvas) -> Result<(), AnyError> {
         // important for AnimStart and invalidation of required regions
         self.with_handler(|h| h.prepare_paint());
-        // TODO fix double buffering
-        self.invalidate();
         let invalid =
             std::mem::replace(&mut borrow_mut!(self.window_state)?.invalid, Region::EMPTY);
-        let invalid = invalid;
+        canvas.save();
+        let mut region = skia_safe::region::Region::new();
+        for rect in invalid.rects() {
+            let rect = skia_safe::IRect{left: rect.x0 as i32, top: rect.y0 as i32, right: rect.x1 as i32, bottom: rect.y1 as i32};
+            region.op_rect(rect, skia_safe::region::RegionOp::Union);
+        }
+        canvas.clip_region(&region, None);
         let mut piet_ctx = Piet::new(canvas);
         let mut win_handler = borrow_mut!(self.handler).unwrap();
 
         win_handler.paint(&mut piet_ctx, &invalid);
+        canvas.restore();
         Ok(())
     }
 
@@ -111,10 +115,6 @@ impl Window {
         let size = self.size()?;
         self.with_handler_and_dont_check_the_other_borrows(|h| {
             h.connect(&handle.into());
-            // TODO hack for us to handle our fancy screens on working laptops
-            #[cfg(target_arch = "x86_64")]
-            h.scale(Scale::new(2., 2.));
-            #[cfg(target_arch = "aarch64")]
             h.scale(Scale::default());
             h.size(size)
         });
@@ -516,7 +516,7 @@ impl WindowBuilder {
         let handler = self.handler.unwrap();
         // TODO
         let state = WindowState {
-            scale: Scale::new(2., 2.),
+            scale: Scale::new(1., 1.),
             _area: Cell::new(ScaledArea::default()),
             _idle_queue: Default::default(),
             size: self.size,

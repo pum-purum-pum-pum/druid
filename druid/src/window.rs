@@ -350,7 +350,6 @@ impl<T: Data> Window<T> {
         if self.root.state().needs_layout {
             self.layout(queue, data, env);
         }
-
         piet.fill(
             invalid.bounding_box(),
             &env.get(crate::theme::WINDOW_BACKGROUND_COLOR),

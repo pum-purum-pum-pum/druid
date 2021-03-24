@@ -43,7 +43,7 @@ hdr = ["piet-common/hdr"]
 [dependencies]
 gl = "0.14"
 glutin = { version = "0.25", default_features = false, optional = true }
-skia-safe = { git = "https://github.com/Vurich/rust-skia.git",waylandatures = ["gl", "lottie", "textlayout"], optional = true }
+skia-safe = { git = "https://github.com/Vurich/rust-skia.git", features = ["gl", "lottie", "textlayout"], optional = true }
 
 # NOTE: When changing the piet or kurbo versions, ensure that
 #       the kurbo version included in piet is compatible with the kurbo version specified here.
