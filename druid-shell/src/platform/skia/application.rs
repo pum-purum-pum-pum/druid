@@ -320,10 +320,12 @@ impl Application {
         Clipboard
     }
 
-    pub fn _hide(&self) {
+    #[cfg(target_os = "macos")]
+    pub fn hide(&self) {
     }
 
-    pub fn _hide_others(&self) {
+    #[cfg(target_os = "macos")]
+    pub fn hide_others(&self) {
     }
 
     pub fn get_locale() -> String {
