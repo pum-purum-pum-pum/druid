@@ -453,9 +453,9 @@ pub struct CustomCursor;
 pub(crate) struct WindowBuilder {
     app: Application,
     handler: Option<Box<dyn WinHandler>>,
-    title: String,
+    _title: String,
     _cursor: Cursor,
-    menu: Option<Menu>,
+    _menu: Option<Menu>,
     size: Size,
 }
 
@@ -464,9 +464,9 @@ impl WindowBuilder {
         WindowBuilder {
             app,
             handler: None,
-            title: String::new(),
+            _title: String::new(),
             _cursor: Cursor::Arrow,
-            menu: None,
+            _menu: None,
             size: Size::new(800., 600.),
         }
     }

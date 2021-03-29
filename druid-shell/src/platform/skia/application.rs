@@ -161,7 +161,7 @@ impl Application {
                 None,
             )
             .ok_or_else(|| anyhow!("No window"))
-        };
+        }
 
         let mut surface = create_surface(&gl_context, fb_info, &mut gr_context)?;
         // It's not working on wayland for some reason.
