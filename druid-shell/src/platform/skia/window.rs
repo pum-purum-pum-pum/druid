@@ -505,11 +505,11 @@ impl WindowBuilder {
     }
 
     pub fn set_title<S: Into<String>>(&mut self, title: S) {
-        self.title = title.into();
+        self._title = title.into();
     }
 
     pub fn set_menu(&mut self, menu: Menu) {
-        self.menu = Some(menu);
+        self._menu = Some(menu);
     }
 
     pub fn build(self) -> Result<WindowHandle, Error> {
