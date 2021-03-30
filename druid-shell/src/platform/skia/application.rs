@@ -47,10 +47,11 @@ use anyhow::{anyhow, Error};
 
 const TARGET_FPS: u64 = 60;
 /// Whether to render incrementaly in separate texture and then render it to screen
-#[cfg(not(target_os = "macos"))]
-const BLIT_CANVAS: bool = false;
-#[cfg(target_os = "macos")]
 const BLIT_CANVAS: bool = true;
+//#[cfg(not(target_os = "macos"))]
+//const BLIT_CANVAS: bool = false;
+//#[cfg(target_os = "macos")]
+//const BLIT_CANVAS: bool = true;
 
 type WindowedContext = glutin::ContextWrapper<glutin::PossiblyCurrent, glutin::window::Window>;
 
