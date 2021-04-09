@@ -123,6 +123,8 @@ impl Application {
                 opengl_version: (4, 6),
                 opengles_version: (3, 1),
             })
+            // seems like double buffering is not supported for wayland in glutin
+            //.with_double_buffer(Some(true))
             .build_windowed(window_builder, &event_loop)?;
 
         // Load OpenGL, and make the context current.
@@ -180,13 +182,15 @@ impl Application {
         surface.canvas().scale((scale.x() as f32, scale.y() as f32));
 
         let mut blit_bitmap = Bitmap::new();
-        fn create_blit_canvas<'a>(surface: &mut skia_safe::Surface, blit_bitmap: &mut Bitmap) -> skia_safe::OwnedCanvas<'a> {
+        fn create_blit_canvas<'a>(surface: &mut skia_safe::Surface, blit_bitmap: &mut Bitmap, scale: Scale) -> skia_safe::OwnedCanvas<'a> {
             let surface_image_info = surface.image_info();
-            blit_bitmap.alloc_n32_pixels((surface_image_info.width(), surface_image_info.height()), false);
+            blit_bitmap.alloc_n32_pixels((
+                surface_image_info.width() * scale.x() as i32, 
+                surface_image_info.height() * scale.y() as i32), false);
             let blit_canvas = Canvas::from_bitmap(&blit_bitmap, None);
             blit_canvas
         }
-        let mut blit_canvas = create_blit_canvas(&mut surface, &mut blit_bitmap);
+        let mut blit_canvas = create_blit_canvas(&mut surface, &mut blit_bitmap, scale);
 
         let mut cursor_position = PhysicalPosition::new(0., 0.);
         let mut last_ts = Instant::now();
@@ -239,14 +243,14 @@ impl Application {
                     ..
                 } => {
                     gl_context.resize(physical_size);
-                    blit_canvas = create_blit_canvas(&mut surface, &mut blit_bitmap);
+                    blit_canvas = create_blit_canvas(&mut surface, &mut blit_bitmap, scale);
+                    // TODO something with these unwraps
+                    surface = create_surface(&gl_context, fb_info, &mut gr_context).unwrap();
                     if BLIT_CANVAS {
                         blit_canvas.scale((scale.x() as f32, scale.y() as f32));
                     } else {
                         surface.canvas().scale((scale.x() as f32, scale.y() as f32));
                     }
-                    // TODO something with these unwraps
-                    surface = create_surface(&gl_context, fb_info, &mut gr_context).unwrap();
                     let main_window = self.window().unwrap();
                     main_window.screen_size_changed(physical_size).unwrap();
                 }
@@ -311,7 +315,9 @@ impl Application {
                         gl_context.window().request_redraw();
                     } else {
                         let wait_time = frame_time - since_last_redraw;
-                        *control_flow = ControlFlow::WaitUntil(Instant::now() + wait_time);
+                        //*control_flow = ControlFlow::WaitUntil(Instant::now() + wait_time);
+                        // wayland..
+                        std::thread::sleep(wait_time);
                     }
                 },
             }

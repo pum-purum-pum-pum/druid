@@ -75,6 +75,8 @@ impl Window {
         canvas.save();
         let mut region = skia_safe::region::Region::new();
         for rect in invalid.rects() {
+            let scale = self.state()?.scale;
+            let rect = rect.to_px(scale);
             let rect = skia_safe::IRect{left: rect.x0 as i32, top: rect.y0 as i32, right: rect.x1 as i32, bottom: rect.y1 as i32};
             region.op_rect(rect, skia_safe::region::RegionOp::Union);
         }
@@ -113,9 +115,10 @@ impl Window {
 
     pub fn connect(&self, handle: WindowHandle) -> Result<(), AnyError> {
         let size = self.size()?;
+        let scale = self.state()?.scale;
         self.with_handler_and_dont_check_the_other_borrows(|h| {
             h.connect(&handle.into());
-            h.scale(Scale::default());
+            h.scale(scale);
             h.size(size)
         });
         Ok(())
@@ -374,6 +377,8 @@ impl Window {
     }
 
     pub fn add_invalid_rect(&self, rect: Rect) -> Result<(), AnyError> {
+        let scale = self.state()?.scale;
+        let rect = rect.to_px(scale).expand().to_dp(scale);
         self.state_mut()?.invalid.add_rect(rect);
         Ok(())
     }
@@ -516,7 +521,7 @@ impl WindowBuilder {
         let handler = self.handler.unwrap();
         // TODO
         let state = WindowState {
-            scale: Scale::new(1., 1.),
+            scale: Scale::new(2., 2.),
             _area: Cell::new(ScaledArea::default()),
             _idle_queue: Default::default(),
             size: self.size,
