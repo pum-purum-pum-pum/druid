@@ -172,14 +172,11 @@ impl Application {
         let mut surface = create_surface(&gl_context, fb_info, &mut gr_context)?;
         // It's not working on wayland for some reason.
         let _sf = gl_context.window().scale_factor() as f32;
-        //surface.canvas().scale((sf, sf));
-        //self.window().unwrap().state_mut().unwrap().scale = Scale::new(sf as f64, sf as f64);
         let scale = if let Ok(window) = self.window() {
             window.state().unwrap().scale
         } else {
             Scale::default()
         };
-        surface.canvas().scale((scale.x() as f32, scale.y() as f32));
 
         let mut blit_bitmap = Bitmap::new();
         fn create_blit_canvas<'a>(surface: &mut skia_safe::Surface, blit_bitmap: &mut Bitmap, scale: Scale) -> skia_safe::OwnedCanvas<'a> {
@@ -191,6 +188,11 @@ impl Application {
             blit_canvas
         }
         let mut blit_canvas = create_blit_canvas(&mut surface, &mut blit_bitmap, scale);
+        if BLIT_CANVAS {
+            blit_canvas.scale((scale.x() as f32, scale.y() as f32));
+        } else {
+            surface.canvas().scale((scale.x() as f32, scale.y() as f32));
+        }
 
         let mut cursor_position = PhysicalPosition::new(0., 0.);
         let mut last_ts = Instant::now();
