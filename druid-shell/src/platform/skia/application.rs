@@ -17,7 +17,7 @@
 use std::cell::RefCell;
 use std::convert::TryInto;
 use std::rc::Rc;
-use std::time::{Instant, Duration};
+use std::time::{Duration, Instant};
 
 use crate::application::AppHandler;
 use crate::scale::Scale;
@@ -33,14 +33,14 @@ use glutin::dpi::LogicalSize;
 use glutin::platform::windows::WindowBuilderExtWindows;
 
 use glutin::{
-    event::{Event, KeyboardInput, VirtualKeyCode, WindowEvent},
+    event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder,
     ContextBuilder, GlRequest,
 };
 use skia_safe::{
     gpu::{gl::FramebufferInfo, BackendRenderTarget, SurfaceOrigin},
-    ColorType, Surface, Canvas, Bitmap
+    Bitmap, Canvas, ColorType, Surface,
 };
 
 use anyhow::{anyhow, Error};
@@ -179,11 +179,19 @@ impl Application {
         };
 
         let mut blit_bitmap = Bitmap::new();
-        fn create_blit_canvas<'a>(surface: &mut skia_safe::Surface, blit_bitmap: &mut Bitmap, scale: Scale) -> skia_safe::OwnedCanvas<'a> {
+        fn create_blit_canvas<'a>(
+            surface: &mut skia_safe::Surface,
+            blit_bitmap: &mut Bitmap,
+            scale: Scale,
+        ) -> skia_safe::OwnedCanvas<'a> {
             let surface_image_info = surface.image_info();
-            blit_bitmap.alloc_n32_pixels((
-                surface_image_info.width() * scale.x() as i32, 
-                surface_image_info.height() * scale.y() as i32), false);
+            blit_bitmap.alloc_n32_pixels(
+                (
+                    surface_image_info.width() * scale.x() as i32,
+                    surface_image_info.height() * scale.y() as i32,
+                ),
+                false,
+            );
             let blit_canvas = Canvas::from_bitmap(&blit_bitmap, None);
             blit_canvas
         }
@@ -217,18 +225,6 @@ impl Application {
             match event {
                 Event::WindowEvent {
                     event: WindowEvent::CloseRequested,
-                    ..
-                }
-                | Event::WindowEvent {
-                    event:
-                        WindowEvent::KeyboardInput {
-                            input:
-                                KeyboardInput {
-                                    virtual_keycode: Some(VirtualKeyCode::Escape),
-                                    ..
-                                },
-                            ..
-                        },
                     ..
                 } => {
                     *control_flow = ControlFlow::Exit;
@@ -297,7 +293,11 @@ impl Application {
                         main_window.run_idle();
                         main_window.render(&mut *blit_canvas).unwrap();
                         blit_canvas.flush();
-                        surface_canvas.draw_bitmap(&blit_bitmap, skia_safe::Point::new(0., 0.), None);//Some(&paint));
+                        surface_canvas.draw_bitmap(
+                            &blit_bitmap,
+                            skia_safe::Point::new(0., 0.),
+                            None,
+                        ); //Some(&paint));
                         surface_canvas.flush();
                         gl_context.swap_buffers().unwrap();
                         redraw_timestamp = Instant::now();
@@ -321,7 +321,7 @@ impl Application {
                         // wayland..
                         std::thread::sleep(wait_time);
                     }
-                },
+                }
             }
         });
     }
@@ -333,12 +333,10 @@ impl Application {
     }
 
     #[cfg(target_os = "macos")]
-    pub fn hide(&self) {
-    }
+    pub fn hide(&self) {}
 
     #[cfg(target_os = "macos")]
-    pub fn hide_others(&self) {
-    }
+    pub fn hide_others(&self) {}
 
     pub fn get_locale() -> String {
         //TODO ahem

@@ -24,13 +24,15 @@ use std::sync::{Arc, Mutex};
 
 use instant::Instant;
 
-use crate::kurbo::{Point, Rect, Size, Vec2};
-
-use crate::piet::{Piet, PietText};
+use crate::{
+    kurbo::{Point, Rect, Size, Vec2},
+    piet::{Piet, PietText},
+    Code,
+};
 
 use anyhow::Error as AnyError;
 use glutin::dpi::{PhysicalPosition, PhysicalSize};
-use glutin::event::KeyboardInput;
+use glutin::event::{KeyboardInput, VirtualKeyCode};
 
 use super::application::Application;
 use super::error::Error;
@@ -66,6 +68,141 @@ pub fn convert_mouse_button(mouse_button: glutin::event::MouseButton) -> Option<
     }
 }
 
+fn virtual_keycode_to_code(vkc: VirtualKeyCode) -> Code {
+    use glutin::event::VirtualKeyCode::*;
+
+    // TODO: Many of these keycodes map to shift + another key, for now they are
+    //       left as `Code::Unidentified` - as are any keys that don't have a
+    //       good mapping in the `Code` enum like Fn keys above 12.
+    match vkc {
+        Key1 => Code::Digit1,
+        Key2 => Code::Digit2,
+        Key3 => Code::Digit3,
+        Key4 => Code::Digit4,
+        Key5 => Code::Digit5,
+        Key6 => Code::Digit6,
+        Key7 => Code::Digit7,
+        Key8 => Code::Digit8,
+        Key9 => Code::Digit9,
+        Key0 => Code::Digit0,
+        A => Code::KeyA,
+        B => Code::KeyB,
+        C => Code::KeyC,
+        D => Code::KeyD,
+        E => Code::KeyE,
+        F => Code::KeyF,
+        G => Code::KeyG,
+        H => Code::KeyH,
+        I => Code::KeyI,
+        J => Code::KeyJ,
+        K => Code::KeyK,
+        L => Code::KeyL,
+        M => Code::KeyM,
+        N => Code::KeyN,
+        O => Code::KeyO,
+        P => Code::KeyP,
+        Q => Code::KeyQ,
+        R => Code::KeyR,
+        S => Code::KeyS,
+        T => Code::KeyT,
+        U => Code::KeyU,
+        V => Code::KeyV,
+        W => Code::KeyW,
+        X => Code::KeyX,
+        Y => Code::KeyY,
+        Z => Code::KeyZ,
+        Escape => Code::Escape,
+        F1 => Code::F1,
+        F2 => Code::F2,
+        F3 => Code::F3,
+        F4 => Code::F4,
+        F5 => Code::F5,
+        F6 => Code::F6,
+        F7 => Code::F7,
+        F8 => Code::F8,
+        F9 => Code::F9,
+        F10 => Code::F10,
+        F11 => Code::F11,
+        F12 => Code::F12,
+        // TODO
+        F13 | F14 | F15 | F16 | F17 | F18 | F19 | F20 | F21 | F22 | F23 | F24 => Code::Unidentified,
+        Snapshot => Code::PrintScreen,
+        Scroll => Code::ScrollLock,
+        Pause => Code::Pause,
+        Insert => Code::Insert,
+        Home => Code::Home,
+        Delete => Code::Delete,
+        End => Code::End,
+        PageDown => Code::PageDown,
+        PageUp => Code::PageUp,
+        Left => Code::ArrowLeft,
+        Up => Code::ArrowUp,
+        Right => Code::ArrowRight,
+        Down => Code::ArrowDown,
+        Back => Code::Backspace,
+        Return => Code::Enter,
+        Space => Code::Space,
+        // TODO
+        Compose | Caret => Code::Unidentified,
+        Numlock => Code::NumLock,
+        Numpad0 => Code::Numpad0,
+        Numpad1 => Code::Numpad1,
+        Numpad2 => Code::Numpad2,
+        Numpad3 => Code::Numpad3,
+        Numpad4 => Code::Numpad4,
+        Numpad5 => Code::Numpad5,
+        Numpad6 => Code::Numpad6,
+        Numpad7 => Code::Numpad7,
+        Numpad8 => Code::Numpad8,
+        Numpad9 => Code::Numpad9,
+        NumpadAdd => Code::NumpadAdd,
+        NumpadDivide => Code::NumpadDivide,
+        NumpadDecimal => Code::NumpadDecimal,
+        NumpadComma => Code::NumpadComma,
+        NumpadEnter => Code::NumpadEnter,
+        NumpadEquals => Code::NumpadEqual,
+        NumpadMultiply => Code::NumpadMultiply,
+        NumpadSubtract => Code::NumpadSubtract,
+        // TODO
+        AbntC1 | AbntC2 | Apostrophe | Apps | Asterisk | At | Ax => Code::Unidentified,
+        Backslash => Code::Backslash,
+        // TODO
+        Calculator | Capital | Colon => Code::Unidentified,
+        Comma => Code::Comma,
+        Convert => Code::Convert,
+        Equals => Code::Equal,
+        // TODO
+        Grave | Kana | Kanji | LAlt | LBracket | LControl | LShift | LWin | Mail => {
+            Code::Unidentified
+        }
+        MediaSelect => Code::MediaSelect,
+        MediaStop => Code::MediaStop,
+        Minus => Code::Minus,
+        // TODO
+        Mute | MyComputer | NavigateForward | NavigateBackward | NextTrack => Code::Unidentified,
+        NoConvert => Code::NonConvert,
+        OEM102 => Code::Unidentified,
+        Period => Code::Period,
+        // TODO
+        PlayPause | Plus => Code::Unidentified,
+        Power => Code::Power,
+        // TODO
+        PrevTrack | RAlt | RBracket | RControl | RShift | RWin => Code::Unidentified,
+        Semicolon => Code::Semicolon,
+        Slash => Code::Slash,
+        Sleep => Code::Sleep,
+        // TODO
+        Stop | Sysrq => Code::Unidentified,
+        Tab => Code::Tab,
+        // TODO
+        Underline | Unlabeled | VolumeDown | VolumeUp | Wake | WebBack | WebFavorites
+        | WebForward | WebHome | WebRefresh | WebSearch | WebStop | Yen => Code::Unidentified,
+        Copy => Code::Copy,
+        Paste => Code::Paste,
+        Cut => Code::Cut,
+    }
+}
+
 impl Window {
     pub fn render(&self, canvas: &mut skia_safe::Canvas) -> Result<(), AnyError> {
         // important for AnimStart and invalidation of required regions
@@ -77,7 +214,12 @@ impl Window {
         for rect in invalid.rects() {
             let scale = self.state()?.scale;
             let rect = rect.to_px(scale);
-            let rect = skia_safe::IRect{left: rect.x0 as i32, top: rect.y0 as i32, right: rect.x1 as i32, bottom: rect.y1 as i32};
+            let rect = skia_safe::IRect {
+                left: rect.x0 as i32,
+                top: rect.y0 as i32,
+                right: rect.x1 as i32,
+                bottom: rect.y1 as i32,
+            };
             region.op_rect(rect, skia_safe::region::RegionOp::Union);
         }
         canvas.clip_region(&region, None);
@@ -200,55 +342,9 @@ impl Window {
             glutin::event::ElementState::Released => KeyState::Up,
         };
         let virtual_keycode = key_press.virtual_keycode;
-        if virtual_keycode.is_none() {return} // TODO
-        let virtual_keycode = virtual_keycode.unwrap();
-        use crate::Code;
-        use glutin::event::VirtualKeyCode::*;
-        let code = match virtual_keycode {
-            Key0 => Code::Digit0,
-            Key1 => Code::Digit1,
-            Key2 => Code::Digit2,
-            Key3 => Code::Digit3,
-            Key4 => Code::Digit4,
-            Key5 => Code::Digit5,
-            Key6 => Code::Digit6,
-            Key7 => Code::Digit7,
-            Key8 => Code::Digit8,
-            Key9 => Code::Digit9,
-            Up => Code::ArrowUp,
-            Down => Code::ArrowDown,
-            Left => Code::ArrowLeft,
-            Right => Code::ArrowRight,
-            Return => Code::Enter,
-            Space => Code::Space,
-            Q => Code::KeyQ,
-            W => Code::KeyW,
-            E => Code::KeyE,
-            R => Code::KeyR,
-            T => Code::KeyT,
-            Y => Code::KeyY,
-            U => Code::KeyU,
-            I => Code::KeyI,
-            O => Code::KeyO,
-            P => Code::KeyP,
-            A => Code::KeyA,
-            S => Code::KeyS,
-            D => Code::KeyD,
-            F => Code::KeyF,
-            G => Code::KeyG,
-            H => Code::KeyH,
-            J => Code::KeyJ,
-            K => Code::KeyK,
-            L => Code::KeyL,
-            Z => Code::KeyZ,
-            X => Code::KeyX,
-            C => Code::KeyC,
-            V => Code::KeyV,
-            B => Code::KeyB,
-            N => Code::KeyN,
-            M => Code::KeyM,
-            _ => Code::Unidentified,
-        };
+        let code = virtual_keycode
+            .map(virtual_keycode_to_code)
+            .unwrap_or(Code::Unidentified);
         // TODO mods
         let mods = Modifiers::empty();
         // TODO location
