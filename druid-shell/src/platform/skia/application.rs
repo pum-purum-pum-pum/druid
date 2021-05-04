@@ -297,7 +297,7 @@ impl Application {
                             &blit_bitmap,
                             skia_safe::Point::new(0., 0.),
                             None,
-                        ); //Some(&paint));
+                        );
                         surface_canvas.flush();
                         gl_context.swap_buffers().unwrap();
                         redraw_timestamp = Instant::now();

@@ -24,6 +24,7 @@ default = ["winit_x11"]
 
 winit_x11 = ["druid-shell/winit_x11"]
 winit_wayland = ["druid-shell/winit_wayland"]
+direct_render = ["druid-shell/direct_render"]
 
 gtk = ["druid-shell/gtk"]
 image = ["druid-shell/image"]

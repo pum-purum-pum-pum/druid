@@ -16,8 +16,9 @@ default-target = "x86_64-pc-windows-msvc"
 [features]
 default = []
 
-winit_wayland = ["glutin", "skia-safe", "skia-safe/wayland", "glutin/wayland", "skia"]
-winit_x11 = ["glutin", "skia-safe", "skia-safe/x11", "glutin/x11", "skia"]
+winit_wayland = ["glutin", "skia-safe", "skia-safe/gl", "skia-safe/wayland", "glutin/wayland", "skia"]
+winit_x11 = ["glutin", "skia-safe", "skia-safe/gl", "skia-safe/x11", "glutin/x11", "skia"]
+direct_render = ["skia-safe", "skia", "dri", "skia-safe/egl"]
 
 skia = ["piet-common/skia"]
 gtk = ["gio", "gdk", "gdk-sys", "glib", "glib-sys", "gtk-sys", "gtk-rs", "gdk-pixbuf", "cairo-rs", "piet-common/cairo"]
@@ -42,8 +43,9 @@ hdr = ["piet-common/hdr"]
 
 [dependencies]
 gl = "0.14"
+dri = { git = "https://github.com/pum-purum-pum-pum/DRI.git", optional = true }
 glutin = { version = "0.25", default_features = false, optional = true }
-skia-safe = { git = "https://github.com/Vurich/rust-skia.git", features = ["gl", "lottie", "textlayout"], optional = true }
+skia-safe = { git = "https://github.com/Vurich/rust-skia.git", features = ["lottie", "textlayout"], optional = true }
 
 # NOTE: When changing the piet or kurbo versions, ensure that
 #       the kurbo version included in piet is compatible with the kurbo version specified here.
