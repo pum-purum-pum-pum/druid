@@ -40,14 +40,13 @@ use glutin::{
 };
 use skia_safe::{
     gpu::{gl::FramebufferInfo, BackendRenderTarget, SurfaceOrigin},
-    Bitmap, Canvas, ColorType, Surface,
+    ColorType, Surface,
 };
 
 use anyhow::{anyhow, Error};
 
 const TARGET_FPS: u64 = 60;
 /// Whether to render incrementaly in separate texture and then render it to screen
-const BLIT_CANVAS: bool = true;
 //#[cfg(not(target_os = "macos"))]
 //const BLIT_CANVAS: bool = false;
 //#[cfg(target_os = "macos")]
@@ -178,29 +177,7 @@ impl Application {
             Scale::default()
         };
 
-        let mut blit_bitmap = Bitmap::new();
-        fn create_blit_canvas<'a>(
-            surface: &mut skia_safe::Surface,
-            blit_bitmap: &mut Bitmap,
-            scale: Scale,
-        ) -> skia_safe::OwnedCanvas<'a> {
-            let surface_image_info = surface.image_info();
-            blit_bitmap.alloc_n32_pixels(
-                (
-                    surface_image_info.width() * scale.x() as i32,
-                    surface_image_info.height() * scale.y() as i32,
-                ),
-                false,
-            );
-            let blit_canvas = Canvas::from_bitmap(&blit_bitmap, None);
-            blit_canvas
-        }
-        let mut blit_canvas = create_blit_canvas(&mut surface, &mut blit_bitmap, scale);
-        if BLIT_CANVAS {
-            blit_canvas.scale((scale.x() as f32, scale.y() as f32));
-        } else {
-            surface.canvas().scale((scale.x() as f32, scale.y() as f32));
-        }
+        surface.canvas().scale((scale.x() as f32, scale.y() as f32));
 
         let mut cursor_position = PhysicalPosition::new(0., 0.);
         let mut last_ts = Instant::now();
@@ -241,14 +218,9 @@ impl Application {
                     ..
                 } => {
                     gl_context.resize(physical_size);
-                    blit_canvas = create_blit_canvas(&mut surface, &mut blit_bitmap, scale);
                     // TODO something with these unwraps
                     surface = create_surface(&gl_context, fb_info, &mut gr_context).unwrap();
-                    if BLIT_CANVAS {
-                        blit_canvas.scale((scale.x() as f32, scale.y() as f32));
-                    } else {
-                        surface.canvas().scale((scale.x() as f32, scale.y() as f32));
-                    }
+                    surface.canvas().scale((scale.x() as f32, scale.y() as f32));
                     let main_window = self.window().unwrap();
                     main_window.screen_size_changed(physical_size).unwrap();
                 }
@@ -287,29 +259,12 @@ impl Application {
                             time = time.max(Duration::from_secs(1)) - Duration::from_secs(1);
                         }
                     }
-                    if BLIT_CANVAS {
-                        let surface_canvas = surface.canvas();
-                        let main_window = self.window().unwrap();
-                        main_window.run_idle();
-                        main_window.render(&mut *blit_canvas).unwrap();
-                        blit_canvas.flush();
-                        surface_canvas.draw_bitmap(
-                            &blit_bitmap,
-                            skia_safe::Point::new(0., 0.),
-                            None,
-                        );
-                        surface_canvas.flush();
-                        gl_context.swap_buffers().unwrap();
-                        redraw_timestamp = Instant::now();
-                    } else {
-                        let surface_canvas = surface.canvas();
-                        let main_window = self.window().unwrap();
-                        main_window.run_idle();
-                        main_window.render(&mut *surface_canvas).unwrap();
-                        surface_canvas.flush();
-                        gl_context.swap_buffers().unwrap();
-                        redraw_timestamp = Instant::now();
-                    }
+                    let surface_canvas = surface.canvas();
+                    let main_window = self.window().unwrap();
+                    main_window.render(&mut *surface_canvas).unwrap();
+                    surface_canvas.flush();
+                    gl_context.swap_buffers().unwrap();
+                    redraw_timestamp = Instant::now();
                 }
                 _ => {
                     let since_last_redraw = Instant::now().duration_since(redraw_timestamp);

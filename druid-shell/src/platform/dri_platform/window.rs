@@ -56,14 +56,14 @@ impl Window {
     pub fn render(&self, canvas: &mut skia_safe::Canvas) -> Result<(), AnyError> {
         // important for AnimStart and invalidation of required regions
         self.with_handler(|h| h.prepare_paint());
-        // Hack for always redrawing. Remove once we figure out more clever way to deal with double
-        // buffering (render to texture with skia doesn't seem to work well)
-        self.invalidate();
         let invalid =
             std::mem::replace(&mut borrow_mut!(self.window_state)?.invalid, Region::EMPTY);
+        let prev_invalid = borrow_mut!(self.window_state)?.prev_invalid.clone();
+        let mut buffer_damage = invalid.clone();
+        buffer_damage.union_with(&prev_invalid);
         canvas.save();
         let mut region = skia_safe::region::Region::new();
-        for rect in invalid.rects() {
+        for rect in buffer_damage.rects() {
             let scale = self.state()?.scale;
             let rect = rect.to_px(scale);
             let rect = skia_safe::IRect {
@@ -78,8 +78,9 @@ impl Window {
         let mut piet_ctx = Piet::new(canvas);
         let mut win_handler = borrow_mut!(self.handler).unwrap();
 
-        win_handler.paint(&mut piet_ctx, &invalid);
+        win_handler.paint(&mut piet_ctx, &buffer_damage);
         canvas.restore();
+        borrow_mut!(self.window_state)?.prev_invalid = invalid;
         Ok(())
     }
 
@@ -286,6 +287,7 @@ pub(crate) struct WindowState {
     _idle_queue: Arc<Mutex<Vec<IdleKind>>>,
     size: Size,
     invalid: Region,
+    prev_invalid: Region,
 }
 
 // TODO: support custom cursors
@@ -364,6 +366,7 @@ impl WindowBuilder {
             _idle_queue: Default::default(),
             size: self.size,
             invalid: Region::EMPTY,
+            prev_invalid: Region::EMPTY,
         };
         let window = Rc::new(Window {
             handler: RefCell::new(handler),

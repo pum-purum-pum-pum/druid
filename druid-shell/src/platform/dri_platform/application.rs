@@ -25,15 +25,13 @@ use super::window::Window;
 
 use skia_safe::{
     gpu::{gl::FramebufferInfo, BackendRenderTarget, SurfaceOrigin},
-    Color, ColorType, Surface, Bitmap, Canvas
+    Color, ColorType, Surface
 };
 
 use anyhow::{anyhow, Error};
 
 use dri::gl::*;
 use dri::kms::{drm_screen_height, drm_screen_width, init, swap_buffers};
-
-const BLIT_CANVAS: bool = false;
 
 #[derive(Clone)]
 pub(crate) struct Application {
@@ -126,35 +124,11 @@ impl Application {
                     drm_screen_height()
                 });
         let mut surface = create_surface(fb_info, &mut gr_context);
-        let scale = if let Ok(window) = self.window() {
+        let _scale = if let Ok(window) = self.window() {
             window.state().unwrap().scale
         } else {
             Scale::default()
         };
-        let mut blit_bitmap = Bitmap::new();
-        fn create_blit_canvas<'a>(
-            surface: &mut skia_safe::Surface,
-            blit_bitmap: &mut Bitmap,
-            scale: Scale,
-        ) -> skia_safe::OwnedCanvas<'a> {
-            let surface_image_info = surface.image_info();
-            blit_bitmap.alloc_n32_pixels(
-                (
-                    surface_image_info.width() * scale.x() as i32,
-                    surface_image_info.height() * scale.y() as i32,
-                ),
-                false,
-            );
-            let blit_canvas = Canvas::from_bitmap(&blit_bitmap, None);
-            blit_canvas
-        }
-        let mut blit_canvas = create_blit_canvas(&mut surface, &mut blit_bitmap, scale);
-        dbg!(scale);
-        //if BLIT_CANVAS {
-        //    blit_canvas.scale((scale.x() as f32, scale.y() as f32));
-        //} else {
-        //    surface.canvas().scale((scale.x() as f32, scale.y() as f32));
-        //}
 
         let main_window = self.window().unwrap();
         let size = main_window.size().unwrap();
@@ -187,29 +161,11 @@ impl Application {
             let now = Instant::now();
             main_window.run_timers(now);
             main_window.run_idle();
-            //main_window.render(&mut *canvas).unwrap();
-            //canvas.flush();
-            //unsafe {
-            //    swap_buffers();
-            //}
-            if BLIT_CANVAS {
-                let surface_canvas = surface.canvas();
-                let main_window = self.window().unwrap();
-                main_window.render(&mut *blit_canvas).unwrap();
-                blit_canvas.flush();
-                surface_canvas.draw_bitmap(
-                    &blit_bitmap,
-                    skia_safe::Point::new(0., 0.),
-                    None,
-                );
-                surface_canvas.flush();
-            } else {
-                let surface_canvas = surface.canvas();
-                let main_window = self.window().unwrap();
-                main_window.run_idle();
-                main_window.render(&mut *surface_canvas).unwrap();
-                surface_canvas.flush();
-            }
+
+            let surface_canvas = surface.canvas();
+            let main_window = self.window().unwrap();
+            main_window.render(&mut *surface_canvas).unwrap();
+            surface_canvas.flush();
             unsafe {
                 swap_buffers();
             }
