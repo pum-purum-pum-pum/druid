@@ -14,7 +14,8 @@ rustdoc-args = ["--cfg", "docsrs"]
 default-target = "x86_64-pc-windows-msvc"
 
 [features]
-default = []
+# Add default features for other platform here as well. Make sure they don't conflict
+default = ["winit_x11"]
 
 winit_wayland = ["glutin", "skia-safe", "skia-safe/gl", "skia-safe/wayland", "glutin/wayland", "skia"]
 winit_x11 = ["glutin", "skia-safe", "skia-safe/gl", "skia-safe/x11", "glutin/x11", "skia"]

@@ -42,19 +42,18 @@ pub use self::gtk::*;
 #[cfg(all(feature = "gtk", target_os = "linux"))]
 pub(crate) mod shared;
 
-//#[cfg(all(not(all(feature = "x11", feature = "gtk")), target_os = "linux"))]
-#[cfg(any(feature = "winit_x11", feature = "winit_wayland"))]
+#[cfg(all(any(feature = "winit_x11", feature = "winit_wayland"), any(target_os = "linux", target_os = "macos")))]
 mod skia;
-#[cfg(any(feature = "winit_x11", feature = "winit_wayland"))]
+#[cfg(all(any(feature = "winit_x11", feature = "winit_wayland"), any(target_os = "linux", target_os = "macos")))]
 pub use skia::*;
-#[cfg(any(feature = "winit_x11", feature = "winit_wayland"))]
+#[cfg(all(any(feature = "winit_x11", feature = "winit_wayland"), any(target_os = "linux", target_os = "macos")))]
 pub(crate) mod shared;
 
-#[cfg(feature = "direct_render")]
+#[cfg(all(feature = "direct_render", target_os = "linux"))]
 mod dri_platform;
-#[cfg(feature = "direct_render")]
+#[cfg(all(feature = "direct_render", target_os = "linux"))]
 pub use dri_platform::*;
-#[cfg(feature = "direct_render")]
+#[cfg(all(feature = "direct_render", target_os = "linux"))]
 pub(crate) mod shared;
 
 #[cfg(target_arch = "wasm32")]
