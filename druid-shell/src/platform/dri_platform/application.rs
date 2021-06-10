@@ -107,7 +107,7 @@ impl Application {
                     drm_screen_height()
                 }),
                 None,
-                0,
+                8, // TODO probably better to fetch it somehow from egl
                 fb_info,
             );
             Surface::from_backend_render_target(

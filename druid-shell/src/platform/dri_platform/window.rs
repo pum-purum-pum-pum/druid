@@ -30,6 +30,7 @@ use crate::{
 };
 
 use anyhow::Error as AnyError;
+use skia_safe::IRect;
 
 use super::application::Application;
 use super::error::Error;
@@ -52,8 +53,21 @@ pub struct Window {
     timer_queue: Mutex<BinaryHeap<Timer>>,
 }
 
+// we need it to manually transform clipping rectangles. More info on why we need to do this here:
+// https://docs.microsoft.com/en-us/xamarin/xamarin-forms/user-interface/graphics/skiasharp/curves/clipping
+/// Rotate 90 degrees and shift to perfectly fit the display
+fn transform_clip_rect(rect: IRect, h: i32) -> IRect{
+    let (x1, y1) = (rect.left, rect.bottom);
+    let (x2, y2) = (rect.right, rect.top);
+
+    let (left, bottom) = (h - y1, x2);
+    let (right, top) = (h - y2, x1);
+    IRect::new(left, top, right, bottom)
+}
+
 impl Window {
     pub fn render(&self, canvas: &mut skia_safe::Canvas) -> Result<(), AnyError> {
+        let size = self.size().unwrap();
         // important for AnimStart and invalidation of required regions
         self.with_handler(|h| h.prepare_paint());
         let invalid =
@@ -66,13 +80,15 @@ impl Window {
         for rect in buffer_damage.rects() {
             let scale = self.state()?.scale;
             let rect = rect.to_px(scale);
-            let rect = skia_safe::IRect {
+                let clip_rect = skia_safe::IRect {
                 left: rect.x0 as i32,
                 top: rect.y0 as i32,
                 right: rect.x1 as i32,
                 bottom: rect.y1 as i32,
             };
-            region.op_rect(rect, skia_safe::region::RegionOp::Union);
+            let clip_rect = transform_clip_rect(clip_rect, size.height as i32);
+            region.op_rect(clip_rect, skia_safe::region::RegionOp::Union);
+
         }
         canvas.clip_region(&region, None);
         let mut piet_ctx = Piet::new(canvas);
@@ -361,7 +377,7 @@ impl WindowBuilder {
         let handler = self.handler.unwrap();
         // TODO
         let state = WindowState {
-            scale: Scale::new(2., 2.),
+            scale: Scale::new(1., 1.),
             _area: Cell::new(ScaledArea::default()),
             _idle_queue: Default::default(),
             size: self.size,
